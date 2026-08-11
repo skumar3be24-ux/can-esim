@@ -1,0 +1,54 @@
+* ============================================================
+* NGHDL direct instantiation test - customblock
+*
+* Purpose: prove VHDL -> GHDL -> NGHDL -> ngspice works,
+*          without eSim in the loop.
+*
+* customblock is a PWM generator:
+*   period = 10 clock cycles
+*   D = 1  ->  Q high for 9 of 10 clocks  (90% duty, "boost")
+*   D = 0  ->  Q high for 1 of 10 clocks  (10% duty, "buck")
+*
+* Clock = 1 MHz  ->  PWM period = 10 us
+* D toggles every 40 us so both duty cycles are exercised.
+* ============================================================
+
+* ---------- analog stimulus ----------
+Vclk clk_a 0 PULSE(0 5 0 1n 1n 500n 1u)
+Vd   d_a   0 PULSE(0 5 0 1n 1n 40u 80u)
+Rclk clk_a 0 1meg
+Rd   d_a   0 1meg
+
+* ---------- analog -> digital ----------
+Aadc1 [clk_a] [clk_d] adcmod
+Aadc2 [d_a]   [d_d]   adcmod
+.model adcmod adc_bridge(in_low=1.5 in_high=3.5)
+
+* ---------- the NGHDL model under test ----------
+* port order follows the VHDL entity: C, D, Q
+a1 [clk_d] [d_d] [q_d] u1
+.model u1 customblock(rise_delay=1.0e-9 fall_delay=1.0e-9
++                     input_load=1.0e-12 instance_id=1)
+
+* ---------- digital -> analog so we can plot it ----------
+Adac1 [q_d] [q_a] dacmod
+.model dacmod dac_bridge(out_low=0 out_high=5 out_undef=2.5
++                        t_rise=1n t_fall=1n)
+Rq q_a 0 1k
+
+.tran 50n 160u
+
+.control
+run
+echo "--------------------------------------------"
+echo "Expect: D high  -> Q ~90% duty (9us high per 10us)"
+echo "        D low   -> Q ~10% duty (1us high per 10us)"
+echo "--------------------------------------------"
+* average of Q over one PWM period while D=1  (t = 20us..30us)
+meas tran duty_boost AVG v(q_a) FROM=20u TO=30u
+* average of Q over one PWM period while D=0  (t = 60us..70us)
+meas tran duty_buck  AVG v(q_a) FROM=60u TO=70u
+plot v(clk_a) v(d_a) v(q_a)
+.endc
+
+.end
