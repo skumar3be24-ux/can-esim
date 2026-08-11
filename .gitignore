@@ -1,0 +1,26 @@
+# GHDL build artefacts
+work-obj93.cf
+*.o
+*.cf
+vhdl/**/tb_[!.]*
+!vhdl/tb/*.vhdl
+
+# Waveform dumps (regenerable)
+*.vcd
+*.ghw
+
+# ngspice output
+*.raw
+*.out
+
+# eSim / KiCad generated
+*-cache.lib
+*-rescue.lib
+*.bak
+*.net
+_saved_*
+esim_workspace
+
+# OS
+.DS_Store
+*~
