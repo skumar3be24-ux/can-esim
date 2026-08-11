@@ -24,3 +24,4 @@ esim_workspace
 # OS
 .DS_Store
 *~
+client.log
