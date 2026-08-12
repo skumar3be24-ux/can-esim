@@ -19,3 +19,9 @@
 - NGHDL parser is formatting-sensitive: ports must follow customblock style
 - Benchmark: 1 instance @ 2 MHz over 1.5 ms = 4.9 s -> 16 tq / 2 MHz CONFIRMED viable
 - Patched: GTKWave auto-launch disabled in generator and existing scripts
+
+## Day 6 - VHDL fundamentals I
+- run.sh development loop built and working (edit -> test in ~2 s)
+- counter.vhdl: clocked process, async reset, unsigned vs std_logic_vector
+- tb_counter.vhdl: 4 self-checking asserts, all pass
+- Verified signal-assignment delay: a lags cnt by 1 clock, b lags a by 1 clock
