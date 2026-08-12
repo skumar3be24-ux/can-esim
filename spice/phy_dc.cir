@@ -1,0 +1,79 @@
+CAN PHY - DC level verification (Day 13)
+* ============================================================
+* One CAN node driver on a terminated bus.
+*
+* PREDICTED (roadmap Part 3, section 3.8):
+*
+*   Recessive (driver off):
+*       CANH = CANL = 2.500 V      Vdiff = 0.000 V      I = 0 mA
+*
+*   Dominant (driver on):
+*       CANH = 3.500 V   CANL = 1.500 V   Vdiff = 2.000 V
+*       I    = 33.333 mA            P = 166.7 mW
+*
+* DERIVATION of R_on:
+*       R_diff  = 120 || 120                 = 60.00 ohm
+*       I       = Vdiff / R_diff = 2.0 / 60  = 33.333 mA
+*       R_on_H  = (VCC - V_CANH) / I = 1.5 / 0.033333 = 45.00 ohm
+*       R_on_L  = (V_CANL - 0)   / I = 1.5 / 0.033333 = 45.00 ohm
+*
+* CHECK: R_total = 45 + 60 + 45 = 150 ohm; I = 5/150 = 33.333 mA
+* ============================================================
+
+.param VCC_V  = 5.0
+.param RON    = 45
+.param RTERM  = 120
+.param RBIAS  = 10k
+
+* ---------- supplies ----------
+Vcc   vcc  0  DC {VCC_V}
+Vref  vref 0  DC 2.5
+
+* ---------- bus termination, one at each end ----------
+Rterm1 canh canl {RTERM}
+Rterm2 canh canl {RTERM}
+
+* ---------- recessive bias network ----------
+Rbias1 canh vref {RBIAS}
+Rbias2 canl vref {RBIAS}
+
+* ---------- bus capacitance (not relevant to DC, kept for realism) ----------
+Cbush canh 0 1n
+Cbusl canl 0 1n
+
+* ---------- DC path to ground on every node (convergence) ----------
+Rleak1 canh 0 100meg
+Rleak2 canl 0 100meg
+
+* ---------- node A output driver ----------
+* ctrl HIGH = dominant, ctrl LOW = recessive
+Vctrl ctrl 0 DC {VCC_V}
+Sh    vcc  canh ctrl 0 swmod
+Sl    canl 0    ctrl 0 swmod
+.model swmod SW(Vt=2.5 Vh=0.2 Ron={RON} Roff=1e9)
+
+.control
+  echo ""
+  echo "=========== DOMINANT (driver on) ==========="
+  op
+  let vdiff_dom = v(canh) - v(canl)
+  let i_drv_dom = -i(vcc)
+  let p_drv_dom = 5.0 * i_drv_dom
+  print v(canh) v(canl) vdiff_dom i_drv_dom p_drv_dom
+
+  echo ""
+  echo "=========== RECESSIVE (driver off) ==========="
+  alter Vctrl 0
+  op
+  let vdiff_rec = v(canh) - v(canl)
+  let i_drv_rec = -i(vcc)
+  print v(canh) v(canl) vdiff_rec i_drv_rec
+
+  echo ""
+  echo "=========== PREDICTED ==========="
+  echo "dominant : CANH 3.500  CANL 1.500  Vdiff 2.000  I 33.333mA  P 166.7mW"
+  echo "recessive: CANH 2.500  CANL 2.500  Vdiff 0.000  I 0mA"
+  echo ""
+.endc
+
+.end

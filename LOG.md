@@ -43,3 +43,8 @@
 - run.sh rewritten to use GHDL make mode (ghdl -i + ghdl -m) - resolves dependency order automatically, required for can_node with 8 submodules
 - Learned: label is a VHDL reserved word; also entity signal block bus register open range severity report next exit new access
 - Phase 1 complete 2 days early (Day 9 satisfied throughout, Day 11 UART redundant with fsm_serial)
+
+## Day 13 - analog PHY DC verification
+- phy_dc.cir: single driver, dual 120 ohm termination, 10k bias network
+- All dominant quantities within 0.2% of prediction; R_on = 45 ohm CONFIRMED
+- Found and fixed modelling artefact: 1M leak resistors shifted recessive level by -25 mV; raised to 100M (error now -0.25 mV)
