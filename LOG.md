@@ -25,3 +25,9 @@
 - counter.vhdl: clocked process, async reset, unsigned vs std_logic_vector
 - tb_counter.vhdl: 4 self-checking asserts, all pass
 - Verified signal-assignment delay: a lags cnt by 1 clock, b lags a by 1 clock
+
+## Day 7 - VHDL fundamentals II (FSM)
+- fsm_serial.vhdl: 4-state Moore FSM, miniature CAN-like frame (SOF + 8 data MSB-first + 3 EOF)
+- tb_fsm_serial.vhdl: verifies all 12 output bits individually, named per field
+- Confirmed testbench detects a deliberate single-bit payload error (exit code 1)
+- Pattern established for can_tx_fsm: enum state type, case in clocked process, when others, Moore outputs concurrent
