@@ -31,3 +31,8 @@
 - tb_fsm_serial.vhdl: verifies all 12 output bits individually, named per field
 - Confirmed testbench detects a deliberate single-bit payload error (exit code 1)
 - Pattern established for can_tx_fsm: enum state type, case in clocked process, when others, Moore outputs concurrent
+
+## Day 8 - VHDL fundamentals III (vectors, conversions, shift registers)
+- shift11.vhdl: 11-bit parallel-load MSB-first shift register
+- Verified with Node A CAN ID 0x0A5 - all 11 bits correct in serial order
+- Slicing/concatenation, integer<->unsigned<->std_logic_vector conversion at port boundary
