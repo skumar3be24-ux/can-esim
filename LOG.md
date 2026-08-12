@@ -48,3 +48,9 @@
 - phy_dc.cir: single driver, dual 120 ohm termination, 10k bias network
 - All dominant quantities within 0.2% of prediction; R_on = 45 ohm CONFIRMED
 - Found and fixed modelling artefact: 1M leak resistors shifted recessive level by -25 mV; raised to 100M (error now -0.25 mV)
+
+## Day 14 - PHY receiver and loopback
+- Added tanh comparator, adc/dac bridges, inverting driver control
+- Full TX->bus->RX loopback verified, polarity correct through both inversions
+- Loop delay 35.4 ns (budget 150 ns); bit period exactly 8.000 us
+- Measurement-point error found: PULSE(5 0 10u 20n 20n 4u 8u) is dominant 10-14us and 18-22us, so t=20us was NOT recessive. Circuit was correct, the probe point was wrong.
