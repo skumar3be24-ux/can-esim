@@ -36,3 +36,10 @@
 - shift11.vhdl: 11-bit parallel-load MSB-first shift register
 - Verified with Node A CAN ID 0x0A5 - all 11 bits correct in serial order
 - Slicing/concatenation, integer<->unsigned<->std_logic_vector conversion at port boundary
+
+## Day 10 - hierarchy and port map (Phase 1 complete)
+- frame_tx.vhdl: FSM instantiating shift11, transmits SOF + 11-bit ID + EOF
+- Verified 15-bit stream for two different IDs (0x0A5, 0x123) - 30 bits checked
+- run.sh rewritten to use GHDL make mode (ghdl -i + ghdl -m) - resolves dependency order automatically, required for can_node with 8 submodules
+- Learned: label is a VHDL reserved word; also entity signal block bus register open range severity report next exit new access
+- Phase 1 complete 2 days early (Day 9 satisfied throughout, Day 11 UART redundant with fsm_serial)
