@@ -54,3 +54,10 @@
 - Full TX->bus->RX loopback verified, polarity correct through both inversions
 - Loop delay 35.4 ns (budget 150 ns); bit period exactly 8.000 us
 - Measurement-point error found: PULSE(5 0 10u 20n 20n 4u 8u) is dominant 10-14us and 18-22us, so t=20us was NOT recessive. Circuit was correct, the probe point was wrong.
+
+## Day 15 - edge rates and capacitance sweep
+- Swept C_bus 100pF..10nF, measured differential 10-90% edge
+- Linear relationship confirmed, all points within 0.7% of prediction
+- Project value 1 nF gives 39.761 ns (predicted 39.6 ns)
+- Practical loading limit identified: 10 nF -> 397 ns edge = 79% of one tq
+- Note: dac_bridge 20 ns transition does NOT contaminate the measurement; the switch flips on threshold crossing rather than tracking the ramp

@@ -1,0 +1,93 @@
+CAN PHY - edge rate vs bus capacitance (Day 15)
+* ============================================================
+* Measures the dominant edge (10-90%) and sweeps bus capacitance
+* to confirm the predicted linear relationship.
+*
+* THEORY (roadmap 3.8.5):
+*   C_diff  = series combination of C_CANH and C_CANL = C/2
+*   R_src   = (R_on_H + R_on_L) || R_diff = 90 || 60 = 36.00 ohm
+*   tau     = R_src * C_diff
+*   t_rise  = 2.2 * tau            (10% to 90%)
+*
+* PREDICTED, per value of C (each line, so C_diff = C/2):
+*
+*     C        C_diff    tau        t_rise
+*   100 pF     50 pF     1.80 ns    3.96 ns
+*   500 pF    250 pF     9.00 ns   19.8  ns
+*     1 nF    500 pF    18.00 ns   39.6  ns    <- project value
+*     5 nF    2.5 nF    90.00 ns  198    ns
+*    10 nF      5 nF   180.00 ns  396    ns
+*
+* The 10 nF case gives an edge of ~396 ns, comparable to one time
+* quantum (500 ns) - that is the practical bus loading limit.
+*
+* Edge measured on the DIFFERENTIAL voltage, 10% to 90% of 2.0 V,
+* i.e. 0.2 V to 1.8 V, which is what the receiver actually sees.
+* ============================================================
+
+.param VCC_V = 5.0
+.param RON   = 45
+.param CBUS  = 1n
+
+Vcc  vcc  0 DC {VCC_V}
+Vref vref 0 DC 2.5
+
+Rterm1 canh canl 120
+Rterm2 canh canl 120
+Rbias1 canh vref 10k
+Rbias2 canl vref 10k
+Cbush  canh 0 {CBUS}
+Cbusl  canl 0 {CBUS}
+Rleak1 canh 0 100meg
+Rleak2 canl 0 100meg
+
+* single dominant pulse: recessive, dominant at 5us, back at 15us
+Vtx tx_a 0 PULSE(5 0 5u 20n 20n 10u 40u)
+Rtx tx_a 0 1meg
+
+Aadc_tx [tx_a] [tx_d] adcmod
+.model adcmod adc_bridge(in_low=1.5 in_high=3.5)
+
+Adac_ctrl [tx_d] [tx_ctl] dacmod
+.model dacmod dac_bridge(out_low=0 out_high=5 out_undef=2.5
++                        t_rise=20n t_fall=20n)
+
+Bdrv ctrl 0 V = 5 - V(tx_ctl)
+
+Sh vcc  canh ctrl 0 swmod
+Sl canl 0    ctrl 0 swmod
+.model swmod SW(Vt=2.5 Vh=0.2 Ron={RON} Roff=1e9)
+
+* differential voltage as an explicit node so we can measure it
+Bdiff vdiff 0 V = V(canh) - V(canl)
+Rdiff vdiff 0 1meg
+
+.tran 1n 25u
+
+.control
+  echo ""
+  echo "   C_bus     C_diff    tau_pred   tr_pred    tr_meas"
+  echo "  -------   -------   ---------  ---------  ---------"
+
+  foreach cval 100p 500p 1n 5n 10n
+    alter Cbush = $cval
+    alter Cbusl = $cval
+    run
+
+    * dominant edge: Vdiff rises 0 -> 2.0 V, so 10% = 0.2, 90% = 1.8
+    meas tran tr TRIG v(vdiff) VAL=0.2 RISE=1 TARG v(vdiff) VAL=1.8 RISE=1
+    echo "  C = $cval"
+    print tr
+  end
+
+  echo ""
+  echo "=========== PREDICTED t_rise ==========="
+  echo "  100p -> 3.96ns   500p -> 19.8ns   1n -> 39.6ns"
+  echo "    5n -> 198ns     10n -> 396ns"
+  echo ""
+  echo "  1 nF is the project value. 10 nF gives an edge comparable"
+  echo "  to one time quantum (500 ns) = practical loading limit."
+  echo ""
+.endc
+
+.end

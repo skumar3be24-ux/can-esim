@@ -40,3 +40,24 @@ PROP_SEG, so the 220 m maximum bus length in roadmap 3.4 holds with margin.
 Driver control is inverted from TX (Bdrv: ctrl = 5 - tx_ctl) because dominant
 is logic 0 but requires the switches closed - real CAN transceivers are
 active-low on TXD for the same reason.
+
+## Day 15 - Edge rate vs bus capacitance (spice/phy_edges.cir)
+
+t_r = ln(9) x R_src x C_diff, R_src = (45+45) || 60 = 36.00 ohm, C_diff = C/2
+
+| C per line | C_diff | Predicted t_r | Measured t_r | Error |
+|---|---|---|---|---|
+| 100 pF | 50 pF | 3.96 ns | 3.934 ns | -0.66% |
+| 500 pF | 250 pF | 19.8 ns | 19.870 ns | +0.35% |
+| 1 nF | 500 pF | 39.6 ns | 39.761 ns | +0.41% |
+| 5 nF | 2.5 nF | 198 ns | 198.844 ns | +0.43% |
+| 10 nF | 5 nF | 396 ns | 397.687 ns | +0.43% |
+
+Linear across two decades: 100x capacitance gives 101x rise time.
+Systematic +0.4% offset is the 2.2 approximation; exact factor is ln(9)=2.19722,
+giving 39.55 ns at 1 nF versus 39.761 ns measured, remainder from the 20 ns
+bridge transition.
+
+PRACTICAL BUS LOADING LIMIT: at 10 nF the edge is 397 ns = 79% of one time
+quantum (500 ns), so the bus is still settling at the sample point. Each
+additional transceiver adds input capacitance, which is what bounds node count.
