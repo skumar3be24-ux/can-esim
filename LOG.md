@@ -61,3 +61,10 @@
 - Project value 1 nF gives 39.761 ns (predicted 39.6 ns)
 - Practical loading limit identified: 10 nF -> 397 ns edge = 79% of one tq
 - Note: dac_bridge 20 ns transition does NOT contaminate the measurement; the switch flips on threshold crossing rather than tracking the ramp
+
+## Day 16 - wired-AND demonstration [KEY RESULT A8]
+- Three drivers on one bus, all 8 input combinations measured
+- Bus recessive in exactly one case: bus = TX_A AND TX_B AND TX_C confirmed electrically
+- Multi-driver Vdiff 0 / 1.9964 / 2.8535 / 3.3300 V, all within 0.2% of prediction
+- Vdiff counts the number of active transmitters - the physical basis of arbitration
+- This is the evidence that makes Day 66 arbitration meaningful rather than just a logic result

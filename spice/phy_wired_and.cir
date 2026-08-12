@@ -1,0 +1,154 @@
+CAN PHY - three-driver wired-AND (Day 16)
+* ============================================================
+* THE ELECTRICAL PROOF UNDERPINNING ARBITRATION.
+*
+* Three independent node drivers share one CANH/CANL pair.
+* Nothing in this netlist computes a logical AND. The AND is
+* produced by the circuit: recessive is passive (bias resistors
+* only), dominant is actively driven, so any driver pulling
+* dominant overrides every driver sitting recessive.
+*
+*      bus = TX_A AND TX_B AND TX_C
+*
+* Stimuli are chosen so all 8 input combinations occur, in a
+* fixed order, one per 10 us window:
+*
+*   window   t (us)      A B C     expected bus
+*     0       0-10       1 1 1     recessive  (Vdiff 0.000)
+*     1      10-20       1 1 0     dominant
+*     2      20-30       1 0 1     dominant
+*     3      30-40       1 0 0     dominant
+*     4      40-50       0 1 1     dominant
+*     5      50-60       0 1 0     dominant
+*     6      60-70       0 0 1     dominant
+*     7      70-80       0 0 0     dominant
+*
+* MULTI-DRIVER LEVELS (roadmap 3.8.3). With n drivers dominant
+* the on-resistances parallel: R_on_eff = 45/n
+*
+*   n   R_on_eff   R_total          I         CANH     CANL    Vdiff
+*   0      -          -           0 mA       2.500    2.500    0.000
+*   1   45.0 ohm   150.0 ohm   33.33 mA      3.500    1.500    2.000
+*   2   22.5 ohm   105.0 ohm   47.62 mA      3.929    1.071    2.857
+*   3   15.0 ohm    90.0 ohm   55.56 mA      4.167    0.833    3.333
+*
+* This rise in Vdiff with more dominant drivers is physically
+* correct and harmless: the receiver threshold is 0.9 V, so the
+* bus still reads dominant. It is also directly visible in the
+* Day 66 arbitration waveform as nodes drop out one by one.
+* ============================================================
+
+.param VCC_V = 5.0
+.param RON   = 45
+
+Vcc  vcc  0 DC {VCC_V}
+Vref vref 0 DC 2.5
+
+* ---------- shared bus ----------
+Rterm1 canh canl 120
+Rterm2 canh canl 120
+Rbias1 canh vref 10k
+Rbias2 canl vref 10k
+Cbush  canh 0 1n
+Cbusl  canl 0 1n
+Rleak1 canh 0 100meg
+Rleak2 canl 0 100meg
+
+* ---------- three independent TX stimuli ----------
+* logic 1 = 5 V = recessive, logic 0 = 0 V = dominant
+* A: period 80us, low for the last 40us  -> 0 from t=40us
+Vtxa txa_a 0 PULSE(5 0 40u 20n 20n 40u 80u)
+* B: period 40us, low for the last 20us
+Vtxb txb_a 0 PULSE(5 0 20u 20n 20n 20u 40u)
+* C: period 20us, low for the last 10us
+Vtxc txc_a 0 PULSE(5 0 10u 20n 20n 10u 20u)
+Rta txa_a 0 1meg
+Rtb txb_a 0 1meg
+Rtc txc_a 0 1meg
+
+Aadc [txa_a txb_a txc_a] [txa_d txb_d txc_d] adcmod
+.model adcmod adc_bridge(in_low=1.5 in_high=3.5)
+
+Adac [txa_d txb_d txc_d] [txa_c txb_c txc_c] dacmod
+.model dacmod dac_bridge(out_low=0 out_high=5 out_undef=2.5
++                        t_rise=20n t_fall=20n)
+
+* ---------- driver control inversion (dominant = 0 = switches closed)
+Bdrva ctrla 0 V = 5 - V(txa_c)
+Bdrvb ctrlb 0 V = 5 - V(txb_c)
+Bdrvc ctrlc 0 V = 5 - V(txc_c)
+
+* ---------- three output drivers on ONE bus ----------
+Sha vcc  canh ctrla 0 swmod
+Sla canl 0    ctrla 0 swmod
+Shb vcc  canh ctrlb 0 swmod
+Slb canl 0    ctrlb 0 swmod
+Shc vcc  canh ctrlc 0 swmod
+Slc canl 0    ctrlc 0 swmod
+.model swmod SW(Vt=2.5 Vh=0.2 Ron={RON} Roff=1e9)
+
+* ---------- differential voltage and receiver ----------
+Bdiff vdiff 0 V = V(canh) - V(canl)
+Rdiff vdiff 0 1meg
+
+Bcomp rx_ana 0 V = 2.5*(1 - tanh(10*(V(canh)-V(canl)-0.7)))
+Rcomp rx_ana 0 1meg
+Aadc_rx [rx_ana] [rx_d] adcmod
+Adac_rx [rx_d] [rx_a] dacmod
+Rrx rx_a 0 1k
+
+.tran 20n 80u
+
+.control
+  run
+
+  echo ""
+  echo "================ WIRED-AND TRUTH TABLE ================"
+  echo " probing mid-window (5us into each 10us interval)"
+  echo ""
+  echo "  t(us)   TX_A   TX_B   TX_C   Vdiff(V)   RX"
+  echo "  -----   ----   ----   ----   --------   --"
+
+  foreach tp 5u 15u 25u 35u 45u 55u 65u 75u
+    meas tran a_$tp FIND v(txa_a) AT=$tp
+    meas tran b_$tp FIND v(txb_a) AT=$tp
+    meas tran c_$tp FIND v(txc_a) AT=$tp
+    meas tran d_$tp FIND v(vdiff) AT=$tp
+    meas tran r_$tp FIND v(rx_a)  AT=$tp
+  end
+
+  echo ""
+  echo "================ MULTI-DRIVER LEVELS ================"
+  echo " n = number of drivers dominant in that window"
+  echo ""
+  * window 1 (t=15us): A=1 B=1 C=0 -> n=1
+  meas tran canh_n1 FIND v(canh)  AT=15u
+  meas tran canl_n1 FIND v(canl)  AT=15u
+  meas tran vd_n1   FIND v(vdiff) AT=15u
+  * window 5 (t=55us): A=0 B=1 C=0 -> n=1 ... use window 3 for n=2
+  * window 3 (t=35us): A=1 B=0 C=0 -> n=1
+  * window 6 (t=65us): A=0 B=0 C=1 -> n=2 (A and B dominant)
+  meas tran canh_n2 FIND v(canh)  AT=65u
+  meas tran canl_n2 FIND v(canl)  AT=65u
+  meas tran vd_n2   FIND v(vdiff) AT=65u
+  * window 7 (t=75us): A=0 B=0 C=0 -> n=3
+  meas tran canh_n3 FIND v(canh)  AT=75u
+  meas tran canl_n3 FIND v(canl)  AT=75u
+  meas tran vd_n3   FIND v(vdiff) AT=75u
+  * window 0 (t=5us): all recessive -> n=0
+  meas tran vd_n0   FIND v(vdiff) AT=5u
+
+  echo ""
+  echo "================ PREDICTED ================"
+  echo "  n=0  Vdiff 0.000   CANH 2.500  CANL 2.500"
+  echo "  n=1  Vdiff 2.000   CANH 3.500  CANL 1.500"
+  echo "  n=2  Vdiff 2.857   CANH 3.929  CANL 1.071"
+  echo "  n=3  Vdiff 3.333   CANH 4.167  CANL 0.833"
+  echo ""
+  echo "  bus recessive ONLY when all three TX are recessive"
+  echo ""
+
+  write phy_wired_and.raw v(txa_a) v(txb_a) v(txc_a) v(vdiff) v(rx_a)
+.endc
+
+.end

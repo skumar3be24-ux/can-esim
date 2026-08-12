@@ -61,3 +61,36 @@ bridge transition.
 PRACTICAL BUS LOADING LIMIT: at 10 nF the edge is 397 ns = 79% of one time
 quantum (500 ns), so the bus is still settling at the sample point. Each
 additional transceiver adds input capacitance, which is what bounds node count.
+
+## Day 16 - WIRED-AND TRUTH TABLE (spice/phy_wired_and.cir) [evidence A8]
+
+Three independent drivers on one CANH/CANL pair. No logic in the netlist
+computes AND; the bus does it, because recessive is passive and dominant
+is actively driven.
+
+| t (us) | TX_A | TX_B | TX_C | Vdiff | RX | Bus |
+|---|---|---|---|---|---|---|
+| 5 | 1 | 1 | 1 | 0.0000004 V | 1 | recessive |
+| 15 | 1 | 1 | 0 | 1.9964 V | 0 | dominant |
+| 25 | 1 | 0 | 1 | 1.9964 V | 0 | dominant |
+| 35 | 1 | 0 | 0 | 2.8535 V | 0 | dominant |
+| 45 | 0 | 1 | 1 | 1.9964 V | 0 | dominant |
+| 55 | 0 | 1 | 0 | 2.8535 V | 0 | dominant |
+| 65 | 0 | 0 | 1 | 2.8535 V | 0 | dominant |
+| 75 | 0 | 0 | 0 | 3.3300 V | 0 | dominant |
+
+Recessive in exactly one row: bus = TX_A AND TX_B AND TX_C. CONFIRMED.
+
+Multi-driver levels (R_on_eff = 45/n):
+
+| n | Predicted Vdiff | Measured | Error | CANH pred/meas | CANL pred/meas |
+|---|---|---|---|---|---|
+| 0 | 0.000 V | 4.5e-7 V | - | 2.500 / 2.4998 | 2.500 / 2.4998 |
+| 1 | 2.000 V | 1.9964 V | -0.18% | 3.500 / 3.4982 | 1.500 / 1.5018 |
+| 2 | 2.857 V | 2.8535 V | -0.12% | 3.929 / 3.9267 | 1.071 / 1.0733 |
+| 3 | 3.333 V | 3.3300 V | -0.09% | 4.167 / 4.1650 | 0.833 / 0.8350 |
+
+Vdiff RISES with the number of dominant drivers because on-resistances
+parallel. A logic gate cannot do this - it is the signature of real parallel
+current sources on a shared 60 ohm load. In the Day 66 arbitration waveform
+this appears as Vdiff stepping 3.33 -> 2.86 -> 2.00 V as nodes drop out.
