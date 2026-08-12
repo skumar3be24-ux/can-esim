@@ -1,0 +1,136 @@
+CAN PHY - transmission line, 220 m bus (Day 17)
+* ============================================================
+* Replaces the ideal wire between two nodes with a real
+* transmission line, and measures the propagation delay that
+* PROP_SEG was sized to accommodate.
+*
+* LINE PARAMETERS (roadmap 3.4):
+*   Z0 = 120 ohm      matched to the termination resistors
+*   v  = 2e8 m/s      typical twisted pair, 0.66c
+*
+*   L' = Z0 / v          = 120 / 2e8      = 600 nH/m
+*   C' = 1 / (Z0 * v)    = 1/(120 * 2e8)  = 41.67 pF/m
+*   check: sqrt(L'/C') = sqrt(600n/41.67p) = 120 ohm      OK
+*   check: 1/sqrt(L'C') = 2e8 m/s                          OK
+*
+*   For 220 m:  L = 132 uH   C = 9.167 nF   TD = 1.100 us
+*
+* WHY 220 m:
+*   PROP_SEG must cover the ROUND TRIP - a bit must reach the
+*   furthest node and that node's response must return within
+*   the same bit time.
+*
+*   PROP_SEG    >= 2 * (t_bus + t_trx)
+*   5 tq = 2500 ns >= 2 * (t_bus + 150 ns)
+*   t_bus       <= 1100 ns
+*   L_max        = 1100 ns / 5 ns/m = 220 m
+*
+* PREDICTED:
+*   one-way delay      TD      = 1.100 us  = 2.2 tq
+*   round trip + trx   2*(1.1u + 0.15u)    = 2.500 us = 5.0 tq
+*   which is EXACTLY PROP_SEG. The design sits on its limit by
+*   construction - that is what 220 m means.
+* ============================================================
+
+.param VCC_V = 5.0
+.param RON   = 45
+.param TDLY  = 1.1u
+
+Vcc  vcc  0 DC {VCC_V}
+Vref vref 0 DC 2.5
+
+* ============ segment A : near end, node A lives here ============
+Rterm_a  canh_a canl_a 120
+Rbias1   canh_a vref 10k
+Rbias2   canl_a vref 10k
+Ca_h     canh_a 0 500p
+Ca_l     canl_a 0 500p
+Rleak_ah canh_a 0 100meg
+Rleak_al canl_a 0 100meg
+
+* ============ 220 m twisted pair ============
+* T element ports: (port1+, port1-, port2+, port2-)
+* Using CANL as the return path makes this a differential line.
+Tline canh_a canl_a canh_b canl_b Z0=120 TD={TDLY}
+
+* ============ segment B : far end, node B lives here ============
+Rterm_b  canh_b canl_b 120
+Cb_h     canh_b 0 500p
+Cb_l     canl_b 0 500p
+Rleak_bh canh_b 0 100meg
+Rleak_bl canl_b 0 100meg
+
+* ============ node A driver (near end) ============
+* single dominant pulse: dominant from 10 us to 30 us
+Vtxa txa_a 0 PULSE(5 0 10u 20n 20n 20u 100u)
+Rta  txa_a 0 1meg
+Aadc_a [txa_a] [txa_d] adcmod
+.model adcmod adc_bridge(in_low=1.5 in_high=3.5)
+Adac_a [txa_d] [txa_c] dacmod
+.model dacmod dac_bridge(out_low=0 out_high=5 out_undef=2.5
++                        t_rise=20n t_fall=20n)
+Bdrva ctrla 0 V = 5 - V(txa_c)
+Sha vcc    canh_a ctrla 0 swmod
+Sla canl_a 0      ctrla 0 swmod
+.model swmod SW(Vt=2.5 Vh=0.2 Ron={RON} Roff=1e9)
+
+* ============ node B driver (far end) - idle in this test ============
+Vtxb txb_a 0 DC 5
+Rtb  txb_a 0 1meg
+Aadc_b [txb_a] [txb_d] adcmod
+Adac_b [txb_d] [txb_c] dacmod
+Bdrvb ctrlb 0 V = 5 - V(txb_c)
+Shb vcc    canh_b ctrlb 0 swmod
+Slb canl_b 0      ctrlb 0 swmod
+
+* ============ differential voltage at both ends ============
+Bda vda 0 V = V(canh_a) - V(canl_a)
+Rda vda 0 1meg
+Bdb vdb 0 V = V(canh_b) - V(canl_b)
+Rdb vdb 0 1meg
+
+* ============ receiver at the FAR end ============
+Bcompb rxb_ana 0 V = 2.5*(1 - tanh(10*(V(canh_b)-V(canl_b)-0.7)))
+Rcompb rxb_ana 0 1meg
+Aadc_rxb [rxb_ana] [rxb_d] adcmod
+Adac_rxb [rxb_d] [rxb_a] dacmod
+Rrxb rxb_a 0 1k
+
+.tran 5n 40u
+
+.control
+  run
+
+  echo ""
+  echo "============ PROPAGATION DELAY ============"
+  * near-end edge to far-end edge, measured at 50% of 2.0 V
+  meas tran t_prop TRIG v(vda) VAL=1.0 RISE=1 TARG v(vdb) VAL=1.0 RISE=1
+
+  echo ""
+  echo "============ LEVELS AT BOTH ENDS ============"
+  * t = 20us is well inside the dominant window, after settling
+  meas tran vda_dom FIND v(vda) AT=20u
+  meas tran vdb_dom FIND v(vdb) AT=20u
+  meas tran vda_rec FIND v(vda) AT=5u
+  meas tran vdb_rec FIND v(vdb) AT=5u
+
+  echo ""
+  echo "============ FAR-END RECEIVER ============"
+  meas tran rxb_dom FIND v(rxb_a) AT=20u
+  meas tran rxb_rec FIND v(rxb_a) AT=5u
+
+  echo ""
+  echo "============ TOTAL LOOP (near TX -> far RX) ============"
+  meas tran t_txrx TRIG v(txa_a) VAL=2.5 FALL=1 TARG v(rxb_a) VAL=2.5 FALL=1
+
+  echo ""
+  echo "============ PREDICTED ============"
+  echo "  t_prop  1.100 us  = 2.2 tq"
+  echo "  t_txrx  ~1.14 us  (1.1 us line + ~35 ns transceiver)"
+  echo "  round trip + 150 ns transceiver = 2.500 us = 5 tq = PROP_SEG"
+  echo "  vda_dom = vdb_dom = 1.996 V   vda_rec = vdb_rec = 0 V"
+  echo "  rxb_dom = 0 V   rxb_rec = 5 V"
+  echo ""
+.endc
+
+.end

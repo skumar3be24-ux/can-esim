@@ -68,3 +68,10 @@
 - Multi-driver Vdiff 0 / 1.9964 / 2.8535 / 3.3300 V, all within 0.2% of prediction
 - Vdiff counts the number of active transmitters - the physical basis of arbitration
 - This is the evidence that makes Day 66 arbitration meaningful rather than just a logic result
+
+## Day 17 - transmission line and propagation delay
+- 220 m twisted pair modelled with T element, Z0 = 120 ohm, TD = 1.1 us
+- Measured propagation 1.113567 us against 1.100 us predicted (+1.2%, edge crossing)
+- Round trip 2.2704 us against PROP_SEG 2.500 us: 9.2% margin, small by design
+- PROP_SEG = 5 tq now justified by measurement rather than assumption
+- No reflections with matched 120 ohm terminations, as Gamma = 0 predicts

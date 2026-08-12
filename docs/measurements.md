@@ -94,3 +94,37 @@ Vdiff RISES with the number of dominant drivers because on-resistances
 parallel. A logic gate cannot do this - it is the signature of real parallel
 current sources on a shared 60 ohm load. In the Day 66 arbitration waveform
 this appears as Vdiff stepping 3.33 -> 2.86 -> 2.00 V as nodes drop out.
+
+## Day 17 - Transmission line, 220 m bus (spice/phy_tline.cir)
+
+Line: Z0 = 120 ohm, v = 2e8 m/s, L = 600 nH/m, C = 41.67 pF/m
+For 220 m: L = 132 uH, C = 9.167 nF, TD = 1.100 us
+
+| Measurement | Predicted | Measured | Error |
+|---|---|---|---|
+| Propagation delay | 1.100 us | 1.113567 us | +1.2% |
+| TX -> far RX | ~1.135 us | 1.135200 us | - |
+| Near-end Vdiff dominant | 1.996 V | 1.996406 V | - |
+| Far-end Vdiff dominant | 1.996 V | 1.991271 V | -0.26% |
+| Both ends recessive | 0 V | 3.0e-7 V | - |
+| Far-end RX dom / rec | 0 / 5 V | 0 / 5 V | exact |
+
+The +1.2% on t_prop is the 50% crossing of a finite-rise edge; line delay is
+1.100 us by construction. t_txrx - t_prop = 21.6 ns = transceiver contribution.
+No reflections: both ends terminated 120 ohm into a 120 ohm line, Gamma = 0.
+Far-end level 0.26% low is real line loss, not ringing.
+
+PROP_SEG JUSTIFICATION (this is why PROP_SEG = 5 tq):
+  t_bus (measured)   = 1.1136 us
+  t_trx (measured)   = 0.0216 us
+  round trip         = 2 x (1.1136 + 0.0216) = 2.2704 us
+  PROP_SEG = 5 tq    = 2.500 us
+  margin             = 0.230 us = 0.46 tq = 9.2%
+
+Margin is small BY DESIGN - 220 m was derived as the maximum length for this
+segment allocation. Day 71 should see arbitration fail around 240-250 m.
+
+HONESTY NOTE for report: the design allowed 150 ns for the transceiver but the
+simulated one is 21.6 ns. Real CAN transceivers are 100-255 ns, so 150 ns is the
+figure to quote; the simulation is optimistic about the transceiver, not
+conservative.
