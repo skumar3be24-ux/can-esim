@@ -1,0 +1,43 @@
+* ============================================================
+* NGHDL performance benchmark
+*
+* Question: how long does an NGHDL model take to simulate at the
+* clock rate and duration the CAN project actually needs?
+*
+* CAN design targets:
+*   tq clock   = 2 MHz   (500 ns period)
+*   simulation = 1.5 ms  (one frame + margin)
+*   -> ~3000 clock periods, ~6000 digital edges per node
+*
+* This runs ONE customblock instance under exactly those conditions.
+* Multiply the wall-clock time by ~4 for a four-node CAN bus.
+*
+* Interpretation:
+*   < 30 s   -> comfortable, keep 16 tq / 2 MHz as planned
+*   30-120 s -> workable but slow; consider 8 tq (1 MHz) for
+*               day-to-day work, 16 tq for final results
+*   > 120 s  -> 2 MHz is not viable; Part 3 timing must be revisited
+* ============================================================
+
+Vclk clk_a 0 PULSE(0 5 0 1n 1n 250n 500n)
+Vd   d_a   0 PULSE(0 5 0 1n 1n 400u 800u)
+Rclk clk_a 0 1meg
+Rd   d_a   0 1meg
+
+Aadc [clk_a d_a] [clk_d d_d] adcmod
+.model adcmod adc_bridge(in_low=1.5 in_high=3.5)
+
+a1 [clk_d] [d_d] [q_d] u1
+.model u1 customblock(rise_delay=1.0e-9 fall_delay=1.0e-9
++                     input_load=1.0e-12 instance_id=1)
+
+Adac [q_d] [q_a] dacmod
+.model dacmod dac_bridge(out_low=0 out_high=5 out_undef=2.5
++                        t_rise=1n t_fall=1n)
+Rq q_a 0 1k
+
+.tran 100n 1.5m
+
+.measure tran q_avg AVG v(q_a) FROM=100u TO=400u
+
+.end

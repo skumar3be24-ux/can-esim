@@ -1,0 +1,56 @@
+* ============================================================
+* NGHDL probe B - multiple instances of one model
+*
+* probe_vec computes even parity of a 4-bit input.
+* Parity is order independent, so bit ordering does not matter.
+*
+*   Instance u1: din = 0,0,0,T   -> dout1 = T
+*   Instance u2: din = 0,0,1,T   -> dout2 = NOT T
+*
+* If the two outputs are complementary and both track T, then two
+* instances of the same NGHDL model coexist and are independent.
+*
+* T toggles with period 20us: high 0-10us, low 10-20us, ...
+*
+* Expected:
+*   at t = 5us   (T=1):  dout1 = 5V, dout2 = 0V
+*   at t = 15us  (T=0):  dout1 = 0V, dout2 = 5V
+* ============================================================
+
+* ---------- stimulus ----------
+Vzero  zero_a 0 DC 0
+Vone   one_a  0 DC 5
+Vtog   tog_a  0 PULSE(0 5 0 1n 1n 10u 20u)
+Rz zero_a 0 1meg
+Ro one_a  0 1meg
+Rt tog_a  0 1meg
+
+* ---------- analog -> digital ----------
+Aadc [zero_a one_a tog_a] [zero_d one_d tog_d] adcmod
+.model adcmod adc_bridge(in_low=1.5 in_high=3.5)
+
+* ---------- instance 1 : parity(0,0,0,T) = T ----------
+a1 [zero_d zero_d zero_d tog_d] [q1_d] u1
+.model u1 probe_vec(rise_delay=1.0e-9 fall_delay=1.0e-9
++                   input_load=1.0e-12 instance_id=1)
+
+* ---------- instance 2 : parity(0,0,1,T) = NOT T ----------
+a2 [zero_d zero_d one_d tog_d] [q2_d] u2
+.model u2 probe_vec(rise_delay=1.0e-9 fall_delay=1.0e-9
++                   input_load=1.0e-12 instance_id=2)
+
+* ---------- digital -> analog for measurement ----------
+Adac [q1_d q2_d] [q1_a q2_a] dacmod
+.model dacmod dac_bridge(out_low=0 out_high=5 out_undef=2.5
++                        t_rise=1n t_fall=1n)
+Rq1 q1_a 0 1k
+Rq2 q2_a 0 1k
+
+.tran 100n 60u
+
+.measure tran q1_at_T1 FIND v(q1_a) AT=5u
+.measure tran q2_at_T1 FIND v(q2_a) AT=5u
+.measure tran q1_at_T0 FIND v(q1_a) AT=15u
+.measure tran q2_at_T0 FIND v(q2_a) AT=15u
+
+.end
