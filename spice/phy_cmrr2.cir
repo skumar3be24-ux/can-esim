@@ -1,0 +1,150 @@
+CAN PHY - common-mode rejection, CORRECTED (Day 19b)
+* ============================================================
+* Day 19 rev A was WRONG for the DC ground-offset test. The
+* offset was applied only to the 10 k bias network while the
+* 45 ohm driver stayed referenced to global ground, so the
+* driver clamped the bus and the offset was attenuated
+* 10000/45 = 222:1. Observed span was 0.108 V for a 24 V
+* sweep - exactly 222:1 - which confirms the mechanism.
+*
+* CORRECT MODEL:
+*   Node A (transmitter) sits on ground gnd_a = 0.
+*   Node B (receiver)    sits on ground gnd_b = VGND.
+*   The two wires run between them. NOTHING at node B is
+*   referenced to global ground: its termination, bias
+*   network, capacitance and comparator all reference gnd_b.
+*
+*   Now lifting gnd_b genuinely lifts node B's view of the
+*   bus, which is the real physical situation: earth currents
+*   make the two chassis sit at different potentials.
+*
+* WHAT SHOULD HAPPEN:
+*   The wires are physically the same two conductors, so their
+*   ABSOLUTE potential is set by the node A driver. Node B
+*   sees them relative to gnd_b, so node B measures
+*       V(canh) - V(gnd_b)  and  V(canl) - V(gnd_b)
+*   Both shift by -VGND. The DIFFERENCE is unchanged:
+*       (canh - gnd_b) - (canl - gnd_b) = canh - canl
+*   The offset cancels EXACTLY in the subtraction. That is
+*   the entire argument for differential signalling and this
+*   is the experiment that demonstrates it.
+*
+*   vcm_b (node B's view of the common mode) MUST track -VGND.
+*   vd_b  (node B's differential)            MUST stay 2.0 V.
+*
+* INPUT RANGE - the honest caveat:
+*   vcm_b is what a real transceiver's input stage must
+*   tolerate. Outside roughly -12..+12 V a real part
+*   saturates and rejection collapses. The tanh comparator
+*   has no such limit, so we report vcm_b and flag when a
+*   real device would have failed.
+* ============================================================
+
+.param VCC_V = 5.0
+.param RON   = 45
+.param VGND  = 0
+
+* ---- node A ground is the global reference ----
+Vcc  vcc  0 DC {VCC_V}
+
+* ---- node B local ground, lifted by the offset ----
+Vgnd gnd_b 0 DC {VGND}
+
+* ============ node A: driver + termination + bias ============
+Rterm_a canh canl 120
+Vref_a  vref_a 0 DC 2.5
+Rbias_a1 canh vref_a 10k
+Rbias_a2 canl vref_a 10k
+Ca1 canh 0 500p
+Ca2 canl 0 500p
+
+Vtx tx_a 0 PULSE(5 0 10u 20n 20n 20u 100u)
+Rtx tx_a 0 1meg
+Aadc [tx_a] [tx_d] adcmod
+.model adcmod adc_bridge(in_low=1.5 in_high=3.5)
+Adac [tx_d] [tx_c] dacmod
+.model dacmod dac_bridge(out_low=0 out_high=5 out_undef=2.5
++                        t_rise=20n t_fall=20n)
+Bdrv ctrl 0 V = 5 - V(tx_c)
+Sh vcc  canh ctrl 0 swmod
+Sl canl 0    ctrl 0 swmod
+.model swmod SW(Vt=2.5 Vh=0.2 Ron={RON} Roff=1e9)
+
+* ============ node B: EVERYTHING references gnd_b ============
+Rterm_b canh canl 120
+Vref_b  vref_b gnd_b DC 2.5
+Rbias_b1 canh vref_b 10k
+Rbias_b2 canl vref_b 10k
+Cb1 canh gnd_b 500p
+Cb2 canl gnd_b 500p
+
+* leak paths to node B ground, not global ground
+Rleak1 canh gnd_b 100meg
+Rleak2 canl gnd_b 100meg
+
+* ============ node B's VIEW of the bus ============
+* This is what node B's input pins actually see.
+Bvh_b vh_b 0 V = V(canh) - V(gnd_b)
+Rvh_b vh_b 0 1meg
+Bvl_b vl_b 0 V = V(canl) - V(gnd_b)
+Rvl_b vl_b 0 1meg
+
+* differential as node B computes it
+Bd_b vd_b 0 V = V(vh_b) - V(vl_b)
+Rd_b vd_b 0 1meg
+* common mode as node B sees it - this is the input-range stress
+Bcm_b vcm_b 0 V = (V(vh_b) + V(vl_b))/2
+Rcm_b vcm_b 0 1meg
+
+* node A's own view, for comparison - should never move
+Bd_a vd_a 0 V = V(canh) - V(canl)
+Rd_a vd_a 0 1meg
+
+* ============ node B receiver, referenced to gnd_b ============
+Bcomp rx_ana 0 V = 2.5*(1 - tanh(10*(V(vh_b)-V(vl_b)-0.7)))
+Rcomp rx_ana 0 1meg
+Aadc2 [rx_ana] [rx_d] adcmod
+Adac2 [rx_d] [rx_out] dacmod
+Rrx rx_out 0 1k
+
+.tran 5n 20u
+
+.control
+  echo ""
+  echo "===== CORRECTED DC GROUND OFFSET SWEEP ====="
+  echo ""
+
+  foreach vg -12 -7 -2 0 2 7 12
+    alter Vgnd = $vg
+    run
+    echo "  ground offset = $vg V"
+    * node B differential - MUST be 2.0 V always
+    meas tran vdb   FIND v(vd_b)  AT=16u
+    * node A differential - MUST also be 2.0 V always
+    meas tran vda   FIND v(vd_a)  AT=16u
+    * node B common mode - MUST track -VGND
+    meas tran vcmb  FIND v(vcm_b) AT=16u
+    * node B input pin voltages - the input-range stress
+    meas tran vhb   FIND v(vh_b)  AT=16u
+    meas tran vlb   FIND v(vl_b)  AT=16u
+    * node B receiver decision
+    meas tran rxb   FIND v(rx_out) AT=16u
+  end
+
+  echo ""
+  echo "============= HOW TO READ THIS ============="
+  echo "  vdb and vda must BOTH read 2.0 V at every offset."
+  echo "  vcmb must track MINUS the offset:"
+  echo "     offset -12 -> vcmb about +14.5"
+  echo "     offset   0 -> vcmb about  +2.5"
+  echo "     offset +12 -> vcmb about  -9.5"
+  echo "  If vcmb tracks and vdb does not move, common-mode"
+  echo "  rejection is demonstrated exactly."
+  echo ""
+  echo "  vhb/vlb outside -12..+12 V means a REAL transceiver"
+  echo "  would have saturated and failed, even though this"
+  echo "  idealised tanh comparator does not."
+  echo ""
+.endc
+
+.end

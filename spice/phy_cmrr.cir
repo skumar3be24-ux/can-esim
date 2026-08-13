@@ -1,0 +1,191 @@
+CAN PHY - common-mode rejection (Day 19)
+* ============================================================
+* Differential signalling exists to reject noise that appears
+* EQUALLY on both wires. This netlist injects exactly that and
+* measures how much survives at the receiver.
+*
+* TWO DISTURBANCES, DIFFERENT PHYSICS:
+*
+* 1. GROUND OFFSET (DC). Two nodes 220 m apart do not share a
+*    ground. Currents in the chassis/earth make node B's local
+*    ground sit at a different potential from node A's. ISO
+*    11898-2 requires operation over -2 V to +7 V of offset;
+*    real installations see more. We sweep -12 V to +12 V.
+*
+*    Modelled by lifting the far-end reference with Vgnd.
+*
+* 2. COMMON-MODE TRANSIENT (AC). A switching load couples a
+*    fast step onto BOTH wires equally - the twisted pair is
+*    what makes the coupling equal. Modelled as a 1 V step
+*    injected through coupling capacitors onto canh and canl.
+*
+* WHY REJECTION WORKS:
+*    The receiver computes V(canh) - V(canl). Anything added
+*    identically to both cancels exactly in that subtraction.
+*    Rejection is limited only by MISMATCH between the two
+*    paths, not by the disturbance size.
+*
+* CMRR = 20*log10( V_common_in / V_diff_out )   [dB]
+*
+* WHAT LIMITS IT HERE:
+*    - the two 10 k bias resistors are exactly equal (ideal)
+*    - the two 500 pF capacitors are exactly equal (ideal)
+*    So the ideal circuit should reject essentially perfectly.
+*    To get an HONEST number we ALSO run a mismatched case:
+*    1%% resistor tolerance and 5%% capacitor tolerance, which is
+*    what real components give.
+*
+* PREDICTION:
+*    ideal      : Vdiff error ~ 0, CMRR limited by solver noise
+*    mismatched : small but nonzero error, CMRR maybe 40-60 dB
+*    In BOTH cases the receiver must still read correctly,
+*    because the error should be far below the 0.9/0.5 V
+*    thresholds.
+*
+* HONESTY NOTE: a real CAN transceiver has a FINITE common-mode
+* input range (typically -12 V to +12 V). Outside it the input
+* stage saturates and rejection collapses entirely. Our tanh
+* comparator has NO such limit - it will happily reject a 100 V
+* offset, which is physically wrong. We therefore ALSO check
+* whether the absolute node voltages stay inside a plausible
+* -12/+12 V input window, and flag it if they do not.
+* ============================================================
+
+.param VCC_V  = 5.0
+.param RON    = 45
+.param VGND   = 0
+.param RB1    = 10k
+.param RB2    = 10k
+.param CB1    = 500p
+.param CB2    = 500p
+
+Vcc  vcc  0 DC {VCC_V}
+Vref vref 0 DC 2.5
+
+* ---- far-end local ground, lifted by the offset ----
+Vgnd gnd_b 0 DC {VGND}
+
+* ============ bus, single lumped segment ============
+* Day 19 studies rejection, not propagation, so the line is
+* lumped. Propagation was covered on Day 17.
+Rterm_a  canh canl 120
+Rterm_b  canh canl 120
+
+* bias network - referenced to the LOCAL ground of node B so a
+* ground offset actually shifts the common mode
+Rbias1 canh vref_b {RB1}
+Rbias2 canl vref_b {RB2}
+Vrefb  vref_b gnd_b DC 2.5
+
+* line capacitance to the far-end ground
+Cb1 canh gnd_b {CB1}
+Cb2 canl gnd_b {CB2}
+
+Rleak1 canh 0 100meg
+Rleak2 canl 0 100meg
+
+* ============ common-mode transient injection ============
+* 1 V step at t = 14 us, coupled EQUALLY onto both wires
+Vcm  cm_src 0 PULSE(0 1 14u 50n 50n 10u 100u)
+Rcm  cm_src 0 1meg
+Ccm1 cm_src canh 100p
+Ccm2 cm_src canl 100p
+
+* ============ near-end driver ============
+* dominant from 10 us so we test rejection during a dominant bit
+Vtx tx_a 0 PULSE(5 0 10u 20n 20n 20u 100u)
+Rtx tx_a 0 1meg
+Aadc [tx_a] [tx_d] adcmod
+.model adcmod adc_bridge(in_low=1.5 in_high=3.5)
+Adac [tx_d] [tx_c] dacmod
+.model dacmod dac_bridge(out_low=0 out_high=5 out_undef=2.5
++                        t_rise=20n t_fall=20n)
+Bdrv ctrl 0 V = 5 - V(tx_c)
+Sh vcc  canh ctrl 0 swmod
+Sl canl 0    ctrl 0 swmod
+.model swmod SW(Vt=2.5 Vh=0.2 Ron={RON} Roff=1e9)
+
+* ============ measured quantities ============
+* differential - what the receiver actually uses
+Bd vdiff 0 V = V(canh) - V(canl)
+Rd vdiff 0 1meg
+* common mode - the average of the two wires
+Bcm vcom 0 V = (V(canh) + V(canl))/2
+Rcm2 vcom 0 1meg
+
+* ============ receiver ============
+Bcomp rx_ana 0 V = 2.5*(1 - tanh(10*(V(canh)-V(canl)-0.7)))
+Rcomp rx_ana 0 1meg
+Aadc2 [rx_ana] [rx_d] adcmod
+Adac2 [rx_d] [rx_out] dacmod
+Rrx rx_out 0 1k
+
+.tran 5n 24u
+
+.control
+  echo ""
+  echo "=========== PART 1: DC GROUND OFFSET SWEEP ==========="
+  echo "  Vdiff must stay at 2.0 V and RX must read 0 (dominant)"
+  echo "  regardless of how far the far-end ground is lifted."
+  echo ""
+
+  foreach vg -12 -7 -2 0 2 7 12
+    alter Vgnd = $vg
+    run
+    echo "  ground offset = $vg V"
+    * differential during the dominant bit, before the CM transient
+    meas tran vd_dom  FIND v(vdiff) AT=13u
+    * common mode - should track the offset
+    meas tran vcm_dom FIND v(vcom)  AT=13u
+    * absolute wire voltages - check the input range
+    meas tran vh_abs  FIND v(canh)  AT=13u
+    meas tran vl_abs  FIND v(canl)  AT=13u
+    * receiver decision
+    meas tran rx_dom  FIND v(rx_out) AT=13u
+  end
+
+  echo ""
+  echo "=========== PART 2: CM TRANSIENT, MATCHED ==========="
+  echo "  1 V step onto both wires at t=14us via equal 100 pF."
+  echo "  Components exactly matched - rejection should be near"
+  echo "  perfect and limited only by solver tolerance."
+  echo ""
+  alter Vgnd = 0
+  run
+  meas tran vd_before FIND v(vdiff) AT=13u
+  meas tran vd_peak   MAX  v(vdiff) FROM=14u TO=16u
+  meas tran vd_min    MIN  v(vdiff) FROM=14u TO=16u
+  meas tran vcm_step  MAX  v(vcom)  FROM=14u TO=16u
+  meas tran rx_during FIND v(rx_out) AT=16u
+
+  echo ""
+  echo "=========== PART 3: CM TRANSIENT, MISMATCHED ==========="
+  echo "  1%% resistor and 5%% capacitor tolerance - the realistic"
+  echo "  case. THIS is the number to quote as CMRR."
+  echo ""
+  alter RB1 = 10100
+  alter RB2 = 9900
+  alter CB1 = 525p
+  alter CB2 = 475p
+  run
+  meas tran vdm_before FIND v(vdiff) AT=13u
+  meas tran vdm_peak   MAX  v(vdiff) FROM=14u TO=16u
+  meas tran vdm_min    MIN  v(vdiff) FROM=14u TO=16u
+  meas tran rxm_during FIND v(rx_out) AT=16u
+
+  echo ""
+  echo "================ HOW TO READ THIS ================"
+  echo "  PART 1 - vd_dom must be 2.0 V at EVERY offset."
+  echo "           vcm_dom must track the offset (that is the"
+  echo "           disturbance appearing, as it should)."
+  echo "           vh_abs/vl_abs outside -12..+12 V means a real"
+  echo "           transceiver would have failed even though this"
+  echo "           idealised model does not."
+  echo "  PART 2 - vd_peak minus vd_before is the leakage of a 1 V"
+  echo "           common step into the differential. Near zero."
+  echo "  PART 3 - same, with realistic tolerances."
+  echo "           CMRR_dB = 20*log10( 1.0 / |vdm_peak - vdm_before| )"
+  echo ""
+.endc
+
+.end

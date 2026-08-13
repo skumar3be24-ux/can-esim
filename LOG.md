@@ -84,3 +84,14 @@
 - Established WHY the sample point is at 75%: it is one round trip after the edge
 - My prediction that 500 pF would blunt the open-circuit peak was wrong - tau=60ns
   is negligible against the 1.1 us transit
+
+## Day 19 - common-mode rejection
+- Rev A was WRONG: offset applied only to the 10k bias net, driver clamped it 222:1
+- Diagnosed from the data - 0.108 V span for 24 V sweep IS 10000/45
+- Rev B references all of node B to gnd_b; offset then genuinely lifts node B
+- Node B common mode swings 23.89 V while differential is IDENTICAL to 7 digits
+- Rejection is exact by algebra, limited only by component mismatch
+- CMRR with 1% R / 5% C = 33.3 dB referred to actual CM (55.7 dB to source)
+- Input-range violation at +/-12 V documented as a model limitation: real
+  transceivers saturate there, tanh comparator does not
+- Both netlists kept - the broken one documents a real and instructive mistake

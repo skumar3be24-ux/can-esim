@@ -175,3 +175,67 @@ arbitration when the bus flips every bit. At 125 kbit/s the 8 us bit far
 exceeds the 2.27 us round trip so there is no inter-bit overlap. At 1 Mbit/s
 the 1 us bit is SHORTER than the round trip - which is why 1 Mbit/s CAN is
 limited to about 40 m. Day 20 should demonstrate this.
+
+## Day 19 - Common-mode rejection (spice/phy_cmrr.cir, spice/phy_cmrr2.cir)
+
+### REV A WAS WRONG - recorded because the failure is instructive
+phy_cmrr.cir applied the ground offset only to the 10 k bias network while the
+45 ohm driver stayed referenced to global ground. The driver clamped the bus and
+the offset was attenuated 10000/45 = 222:1. Measured span was 0.108 V for a 24 V
+sweep = 222:1 exactly, which confirms the mechanism. The test was measuring
+driver impedance ratio, not common-mode rejection.
+
+FIX (phy_cmrr2.cir): node B termination, bias, capacitance, leak paths and
+comparator ALL reference gnd_b. Nothing at node B touches global ground.
+
+### CORRECTED DC GROUND OFFSET SWEEP
+
+| Offset | vcmb (node B CM) | vdb | vda | vhb | vlb | RX | Real xcvr |
+|---|---|---|---|---|---|---|---|
+| -12 V | +14.446 V | 1.992825 | 1.992825 | +15.443 | +13.450 | dom | FAILS |
+| -7 V | +9.469 V | 1.992825 | 1.992825 | +10.465 | +8.472 | dom | ok |
+| -2 V | +4.491 V | 1.992825 | 1.992825 | +5.487 | +3.495 | dom | ok |
+| 0 V | +2.500 V | 1.992825 | 1.992825 | +3.496 | +1.504 | dom | ok |
+| +2 V | +0.509 V | 1.992825 | 1.992825 | +1.505 | -0.487 | dom | ok |
+| +7 V | -4.469 V | 1.992825 | 1.992825 | -3.472 | -5.465 | dom | ok |
+| +12 V | -9.446 V | 1.992825 | 1.992825 | -8.450 | -10.443 | dom | FAILS |
+
+vcmb spans 23.89 V for a 24 V sweep (tracks -VGND to 0.5%) while vdb is
+IDENTICAL TO SEVEN DIGITS at every offset. Rejection is EXACT, not approximate:
+  (canh - gnd_b) - (canl - gnd_b) = canh - canl
+the offset cancels algebraically. vda = vdb throughout, so both nodes agree on
+the differential while disagreeing by 24 V on absolute potential.
+
+Note vdb = 1.992825 V here vs 1.996406 V on earlier days (-0.18%). This netlist
+has TWO 10 k bias networks (node A and node B) loading the driver instead of
+one. Expected, and it confirms the two-node model is genuinely two nodes.
+
+### CMRR - AC common-mode transient (from rev A, this part was sound)
+1 V step injected onto both wires through equal 100 pF at t = 14 us.
+
+| Case | Vdiff before | Vdiff peak | Vdiff min | Worst excursion |
+|---|---|---|---|---|
+| matched components | 1.996406 | 1.996406 | 1.996406 | 0 (exactly) |
+| 1% R, 5% C tolerance | 1.996406 | 1.997650 | 1.994766 | 1.640 mV |
+
+The matched case rejects perfectly to seven digits - not a result, just
+confirmation that zero mismatch gives zero leakage. Only the mismatched case
+is quotable.
+
+  CMRR referred to the 1 V source   = 20*log10(1.000/0.001640) = 55.7 dB
+  CMRR referred to CM that appeared = 20*log10(0.076/0.001640) = 33.3 dB
+
+The 100 pF coupling only moved the actual common mode by 76 mV, so 33.3 dB is
+the honest figure and it sits in the real-transceiver range of 30-50 dB.
+Error is 1.640 mV against a 0.9 V threshold: 550x margin. RX never wavered.
+
+### MODEL LIMITATION - state this in the report
+The tanh comparator has NO common-mode input range. Real CAN transceivers
+saturate outside roughly -12..+12 V and rejection collapses entirely. At +/-12 V
+offset our node B pins reach +15.44 V and -10.44 V, where real silicon would
+have failed - but this model reports success.
+
+CONSEQUENCE: the ISO 11898-2 requirement of -2 V to +7 V exists because of the
+TRANSCEIVER INPUT RANGE, not because differential signalling degrades. Within
+-7..+7 V our node B pins stay inside +/-12 V and the model is trustworthy.
+Outside that, it is optimistic.
