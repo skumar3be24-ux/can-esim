@@ -227,3 +227,20 @@
   go through a variable first
 - stuff_en driven combinationally from state, per the Day 27 lesson
 - STILL MISSING: ACK generation, error frames, abort on stuff_err
+
+## Day 29 - ACK generation and TX/RX loopback
+- Receiver drives dominant in the ACK slot when the CRC matched; transmitter
+  samples the slot and reports ack_ok / ack_err
+- Wired-AND bus in VHDL: bus <= tx and (not ack_drive), matching the Day 16 SPICE
+- Test 1 (receiver present): ack_drive asserted, bus went dominant, ack_ok
+- Test 2 (receiver in reset): ack_err. This is the discriminating test - an ACK
+  check that always succeeds passes test 1 identically
+- crc_ok must be computed at the END of the CRC field, since the ACK slot is only
+  two bits later. ack_drive is combinational so it is valid during the one-bit
+  slot
+- My independent bus capture was initially keyed off the TRANSMITTER field_id,
+  one slot away from the wire, and reported recessive in both tests. Re-keyed off
+  the receiver ack_drive. A pass that contradicts an independent observation is
+  not a pass
+- run.sh needs a matching src module, so integration testbenches (tb_probe,
+  tb_stuff_rt, tb_ack) are run via ghdl directly. Worth a run_tb.sh eventually

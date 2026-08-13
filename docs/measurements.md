@@ -734,3 +734,51 @@ No ACK generation - the receiver should drive dominant in the ACK slot (Day 29).
 No error frames, no error counters, no extended identifiers, no overload frames.
 frame_rx currently ignores stuff_err rather than aborting the frame; wiring that
 in is Phase 5.
+
+## Day 29 - ACK generation and TX/RX loopback (vhdl/tb/tb_ack.vhdl)
+
+A transmitting node and a receiving node share one wired-AND bus. The receiver
+drives dominant in the ACK slot when the CRC matched; the transmitter samples
+that slot and reports whether anyone acknowledged.
+
+  bus_level <= tx_out and (not ack_drive)
+
+Dominant is Z0Z, so a plain AND is exactly the CAN wired-AND behaviour measured
+in SPICE on Day 16. Any node driving dominant pulls the whole bus dominant.
+
+### RESULT: both tests pass
+
+| Test | Setup | Expected | Observed |
+|---|---|---|---|
+| 1 | receiver active | ack_ok | ack_drive asserted, bus went dominant, rx_done, ack_ok |
+| 2 | receiver held in reset | ack_err | ack_err, no ack_ok |
+
+TEST 2 IS THE ONE THAT MATTERS. An ACK check hardwired to always report success
+would pass test 1 identically. Only removing the receiver proves the check is
+real.
+
+### TIMING CONSTRAINT THAT SHAPED THE DESIGN
+The ACK slot is only two bits after the last CRC bit (CRC sequence -> CRC
+delimiter -> ACK slot), so the receiver must know the CRC verdict BEFORE the
+slot arrives. crc_ok is therefore computed at the END OF THE CRC FIELD, using
+the bit just received (crc_rx(14 downto 1) & bit_in) because the last bit has
+not been registered yet in that cycle. ack_drive is combinational from state so
+it is valid DURING the one-bit slot - a registered version would miss it
+entirely. Third application of the Day 27 lesson.
+
+### MY TESTBENCH OBSERVATION WAS WRONG AT FIRST
+The independent bus capture keyed off field_id = ACK, which is the TRANSMITTER
+state. That sits one slot away from when the bit is physically on the wire, so
+it reported the ACK slot as recessive in BOTH tests - contradicting the reported
+ack_ok in test 1. Re-keying the capture off the receiver ack_drive showed the
+truth: bus dominant at the moment of assertion.
+
+Worth noting the process: both tests were already reporting PASS. The
+contradiction between the reported status and the independent capture is what
+prompted the recheck. A pass that disagrees with an independent observation is
+not a pass.
+
+### NOT YET
+One transmitter and one receiver only - no arbitration between competing
+transmitters (Day 30+). No error frames on a missing ACK: a real node retransmits
+and eventually increments its error counter. That is Phase 5.

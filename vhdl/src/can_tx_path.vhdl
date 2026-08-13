@@ -69,7 +69,10 @@ entity can_tx_path is
     frame_active: out std_logic;
     field_id    : out std_logic_vector(3 downto 0);
     bit_slot    : out std_logic;   -- one pulse per bit slot
-    stuff_now   : out std_logic    -- high when a stuff bit is on the bus
+    sample_now  : out std_logic;   -- one pulse at the sample point
+    stuff_now   : out std_logic;   -- high when a stuff bit is on the bus
+    ack_ok      : out std_logic;   -- pulse: ACK slot was dominant
+    ack_err     : out std_logic    -- pulse: nobody acknowledged
   );
 end can_tx_path;
 
@@ -87,6 +90,8 @@ architecture rtl of can_tx_path is
   signal fg_tx_bit   : std_logic;
   signal fg_stuff_en : std_logic;
   signal fg_active   : std_logic;
+  signal fg_ack_ok   : std_logic;
+  signal fg_ack_err  : std_logic;
   signal fg_field    : std_logic_vector(3 downto 0);
 
   -- CRC
@@ -143,11 +148,14 @@ begin
       frame_start => frame_start,
       id_in => id_in, rtr_in => rtr_in,
       dlc_in => dlc_in, data_in => data_in,
-      bit_en => bit_start,
-      hold   => st_stall_c,        -- <<< back-pressure (combinational)
+      bit_en  => bit_start,
+      bus_bit => can_rx,           -- the actual bus level, for ACK
+      hold    => st_stall_c,       -- <<< back-pressure (combinational)
       tx_bit => fg_tx_bit,
       stuff_en => fg_stuff_en,
       frame_active => fg_active,
+      ack_ok  => fg_ack_ok,
+      ack_err => fg_ack_err,
       crc_clr => crc_clr, crc_en => crc_en,
       crc_bit => crc_bit, crc_val => crc_val,
       field_id => fg_field
@@ -189,6 +197,9 @@ begin
   frame_active <= fg_active;
   field_id     <= fg_field;
   bit_slot     <= bit_start;
+  sample_now   <= sample_pt;
   stuff_now    <= st_stall;
+  ack_ok       <= fg_ack_ok;
+  ack_err      <= fg_ack_err;
 
 end rtl;

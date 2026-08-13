@@ -71,12 +71,17 @@ entity frame_gen is
 
     -- ---- bit-rate interface ----
     bit_en      : in  std_logic;   -- one pulse per bit slot
+    bus_bit     : in  std_logic;   -- what is ACTUALLY on the bus,
+                                   -- sampled in the ACK slot
     hold        : in  std_logic;   -- '1' = downstream stuffer sent a
                                    -- stuff bit this slot; do NOT
                                    -- advance, re-offer the same bit
     tx_bit      : out std_logic;   -- the bit to transmit
     stuff_en    : out std_logic;   -- downstream stuffing active
     frame_active: out std_logic;   -- high for the whole frame
+    ack_ok      : out std_logic;   -- pulse: ACK slot was dominant
+    ack_err     : out std_logic;   -- pulse: ACK slot stayed recessive
+                                   --        - nobody received it
 
     -- ---- CRC interface ----
     crc_clr     : out std_logic;
@@ -129,6 +134,8 @@ architecture rtl of frame_gen is
   signal cen_r   : std_logic := '0';
   signal cbit_r  : std_logic := '0';
   signal field_r : std_logic_vector(3 downto 0) := F_IDLE;
+  signal ackok_r : std_logic := '0';
+  signal ackerr_r: std_logic := '0';
 
   -- CRC value latched when the data field ends, so it stays
   -- stable while it is being shifted out
@@ -152,8 +159,10 @@ begin
       nbytes  <= 0;
 
     elsif rising_edge(clk) then
-      cclr_r <= '0';
-      cen_r  <= '0';
+      cclr_r   <= '0';
+      cen_r    <= '0';
+      ackok_r  <= '0';
+      ackerr_r <= '0';
 
       if state = ST_IDLE then
         tx_r    <= '1';           -- bus idle is recessive
@@ -299,6 +308,14 @@ begin
             state   <= ST_ACKDEL;
 
           when ST_ACKDEL =>
+            -- The ACK slot has just been transmitted. bus_bit now
+            -- carries what was actually on the wire during it: a
+            -- receiver that accepted the frame pulled it dominant.
+            if bus_bit = '0' then
+              ackok_r  <= '1';
+            else
+              ackerr_r <= '1';   -- nobody acknowledged
+            end if;
             tx_r    <= '1';
             stuff_r <= '0';
             field_r <= F_ACKDEL;
@@ -350,5 +367,7 @@ begin
   crc_en       <= cen_r;
   crc_bit      <= cbit_r;
   field_id     <= field_r;
+  ack_ok       <= ackok_r;
+  ack_err      <= ackerr_r;
 
 end rtl;

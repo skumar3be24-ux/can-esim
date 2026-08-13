@@ -78,6 +78,11 @@ entity frame_rx is
     rx_data   : out std_logic_vector(63 downto 0);
 
     -- ---- status ----
+    ack_drive : out std_logic;   -- COMBINATIONAL: '1' = drive the bus
+                                 -- dominant in the ACK slot. Valid
+                                 -- during the slot itself; a
+                                 -- registered version would arrive
+                                 -- a bit late and miss it entirely.
     rx_active : out std_logic;   -- high while decoding a frame
     rx_done   : out std_logic;   -- one pulse: frame complete and good
     crc_err   : out std_logic;   -- one pulse
@@ -134,6 +139,10 @@ architecture rtl of frame_rx is
   -- a form error seen mid-frame, reported at the end
   signal form_seen : std_logic := '0';
 
+  -- CRC verdict, computed the moment the CRC field completes so it
+  -- is available two bits later in the ACK slot
+  signal crc_ok : std_logic := '0';
+
 begin
 
   -- ---------- COMBINATIONAL stuff enable ----------
@@ -144,6 +153,14 @@ begin
                         or state = S_R0  or state = S_DLC
                         or state = S_DATA or state = S_CRC)
               else '0';
+
+  -- ---------- COMBINATIONAL ACK drive ----------
+  -- Dominant in the ACK slot if and only if the CRC matched and no
+  -- form error has been seen. Anything registered here would be a
+  -- bit late: the ACK slot is one bit wide.
+  ack_drive <= '1' when (state = S_ACK and crc_ok = '1'
+                         and form_seen = '0')
+               else '0';
 
   process(clk, reset_n)
     variable dlc_full : std_logic_vector(3 downto 0);
@@ -190,6 +207,7 @@ begin
             data_r    <= (others => '0');
             id_r      <= (others => '0');
             dlc_r     <= (others => '0');
+            crc_ok    <= '0';
             act_r     <= '1';
             form_seen <= '0';
             bitcnt    <= 0;
@@ -301,6 +319,15 @@ begin
             crc_rx(14 - bitcnt) <= bit_in;
             -- crc_en NOT asserted: the CRC does not cover itself
             if bitcnt = 14 then
+              -- The CRC field ends HERE. Compare now, because the
+              -- ACK slot is only two bits away and the decision has
+              -- to be ready. crc_rx(0) has not been registered yet
+              -- this cycle, so include the bit just received.
+              if (crc_rx(14 downto 1) & bit_in) = crc_exp then
+                crc_ok <= '1';
+              else
+                crc_ok <= '0';
+              end if;
               bitcnt <= 0;
               state  <= S_CRCDEL;
             else
@@ -350,7 +377,7 @@ begin
               -- ---- report the outcome ----
               if form_seen = '1' or bit_in = '0' then
                 formerr_r <= '1';
-              elsif crc_rx /= crc_exp then
+              elsif crc_ok = '0' then
                 crcerr_r  <= '1';
               else
                 done_r    <= '1';
