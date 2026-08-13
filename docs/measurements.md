@@ -128,3 +128,50 @@ HONESTY NOTE for report: the design allowed 150 ns for the transceiver but the
 simulated one is 21.6 ns. Real CAN transceivers are 100-255 ns, so 150 ns is the
 figure to quote; the simulation is optimistic about the transceiver, not
 conservative.
+
+## Day 18 - Termination mismatch and reflections (spice/phy_reflection.cir)
+
+Gamma = (R_L - Z0)/(R_L + Z0), Z0 = 120 ohm. Far end mis-terminated, near
+end held at 120 ohm. Driver actual output is 1.9964 V, not nominal 2.000 V.
+
+| R_L | Gamma | Peak pred = 1.9964*(1+G) | Peak meas | Error |
+|---|---|---|---|---|
+| 120 ohm | 0.000 | 1.996 V | 1.996406 V | -0.00% |
+| open | +1.000 | 3.993 V | 3.992809 V | -0.00% |
+| 1 kohm | +0.786 | 3.566 V | 3.565009 V | -0.03% |
+| 60 ohm | -0.333 | 1.331 V | 1.330937 V | -0.01% |
+
+Using the MEASURED driver output rather than the nominal 2.000 V reproduces
+all four peaks to four significant figures. Gamma confirmed to <0.25%.
+
+SETTLED LEVELS at t = 16 us (T element is a DC short, so far end sees
+120 || R_L driven through 2 x 45 ohm):
+
+| R_L | R_par | Divider pred | Measured | Note |
+|---|---|---|---|---|
+| 120 | 60.0 | 2.000 V | 1.996 V | matches |
+| open | 120.0 | 2.857 V | 3.034 V | +6%, bias network ignored |
+| 1 k | 107.1 | 2.719 V | 2.796 V | +3%, bias network ignored |
+| 60 | 40.0 | 1.538 V | 1.533 V | matches |
+
+The two high-impedance cases run above the simple divider because the 10 k
+bias resistors and 100 Mohm leaks pull toward 2.5 V; their effect grows as
+the load impedance rises. Where the load dominates, the divider matches to
+0.3%.
+
+KEY RESULT - rx_samp = 0.000 V (dominant) in ALL FOUR cases, including a
+fully open far end. Worst settled level 1.533 V against a 0.9 V dominant
+threshold: 70% margin.
+
+WHY THE SAMPLE POINT IS AT 75%:
+  reflection settling time = 1 round trip = 2.27 us
+  sample instant           = 12 tq = 6.000 us into the bit
+  6.000 us > 2.27 us, so all reflections have decayed before sampling.
+The sample point is placed to be MORE THAN ONE ROUND TRIP after the edge.
+That is the design rule; this experiment demonstrates it.
+
+CAVEAT: this tested a static dominant bit. Mis-termination is worst during
+arbitration when the bus flips every bit. At 125 kbit/s the 8 us bit far
+exceeds the 2.27 us round trip so there is no inter-bit overlap. At 1 Mbit/s
+the 1 us bit is SHORTER than the round trip - which is why 1 Mbit/s CAN is
+limited to about 40 m. Day 20 should demonstrate this.

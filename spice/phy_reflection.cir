@@ -1,0 +1,129 @@
+CAN PHY - termination mismatch and reflections (Day 18)
+* ============================================================
+* Deliberately mis-terminates the far end of the 220 m line and
+* measures the resulting reflection against theory.
+*
+* REFLECTION COEFFICIENT:
+*     Gamma = (R_L - Z0) / (R_L + Z0)      Z0 = 120 ohm
+*
+*   R_L        Gamma      meaning
+*   --------   --------   ---------------------------------
+*   120 ohm     0.000     matched, no reflection
+*   1e9 (open) +1.000     full positive reflection
+*   1 kohm     +0.786     large positive reflection
+*   60 ohm     -0.333     inverted reflection (over-terminated)
+*
+* WHAT A REFLECTION DOES HERE:
+*   The wave leaves the near end at Vdiff = 2.0 V, travels 1.1 us,
+*   hits the far end and reflects with coefficient Gamma. The
+*   far-end voltage becomes V_incident * (1 + Gamma):
+*
+*     open   : 2.0 * (1 + 1.000) = 4.00 V   doubling
+*     1 kohm : 2.0 * (1 + 0.786) = 3.57 V
+*     120    : 2.0 * (1 + 0.000) = 2.00 V   clean
+*     60     : 2.0 * (1 - 0.333) = 1.33 V   reduced
+*
+*   The reflected wave then returns to the near end after another
+*   1.1 us. Since the NEAR end is still terminated at 120 ohm and
+*   also driven, it mostly absorbs it.
+*
+* THE QUESTION THAT MATTERS:
+*   Sample point is at 12 tq = 6.000 us into the bit. Dominant
+*   starts at t = 10 us here, so the sample instant is t = 16 us.
+*   By then all reflections (round trip 2.2 us) have settled.
+*   Does any mismatch cause a WRONG read at the sample point?
+*
+*   Receiver thresholds: dominant if Vdiff > 0.9 V, recessive if
+*   Vdiff < 0.5 V.
+* ============================================================
+
+.param VCC_V = 5.0
+.param RON   = 45
+.param TDLY  = 1.1u
+.param RLOAD = 120
+
+Vcc  vcc  0 DC {VCC_V}
+Vref vref 0 DC 2.5
+
+* ============ near end ============
+Rterm_a  canh_a canl_a 120
+Rbias1   canh_a vref 10k
+Rbias2   canl_a vref 10k
+Ca_h     canh_a 0 500p
+Ca_l     canl_a 0 500p
+Rleak_ah canh_a 0 100meg
+Rleak_al canl_a 0 100meg
+
+* ============ 220 m line ============
+Tline canh_a canl_a canh_b canl_b Z0=120 TD={TDLY}
+
+* ============ far end - THIS is what we vary ============
+Rterm_b  canh_b canl_b {RLOAD}
+Cb_h     canh_b 0 500p
+Cb_l     canl_b 0 500p
+Rleak_bh canh_b 0 100meg
+Rleak_bl canl_b 0 100meg
+
+* ============ near-end driver ============
+* dominant from 10 us
+Vtxa txa_a 0 PULSE(5 0 10u 20n 20n 20u 100u)
+Rta  txa_a 0 1meg
+Aadc_a [txa_a] [txa_d] adcmod
+.model adcmod adc_bridge(in_low=1.5 in_high=3.5)
+Adac_a [txa_d] [txa_c] dacmod
+.model dacmod dac_bridge(out_low=0 out_high=5 out_undef=2.5
++                        t_rise=20n t_fall=20n)
+Bdrva ctrla 0 V = 5 - V(txa_c)
+Sha vcc    canh_a ctrla 0 swmod
+Sla canl_a 0      ctrla 0 swmod
+.model swmod SW(Vt=2.5 Vh=0.2 Ron={RON} Roff=1e9)
+
+* ============ differential voltages ============
+Bda vda 0 V = V(canh_a) - V(canl_a)
+Rda vda 0 1meg
+Bdb vdb 0 V = V(canh_b) - V(canl_b)
+Rdb vdb 0 1meg
+
+* ============ far-end receiver ============
+Bcompb rxb_ana 0 V = 2.5*(1 - tanh(10*(V(canh_b)-V(canl_b)-0.7)))
+Rcompb rxb_ana 0 1meg
+Aadc_rxb [rxb_ana] [rxb_d] adcmod
+Adac_rxb [rxb_d] [rxb_a] dacmod
+Rrxb rxb_a 0 1k
+
+.tran 5n 20u
+
+.control
+  echo ""
+  echo "   R_L      Gamma_pred   Vdb_peak   Vdb_settled   Vda_peak   RX@sample"
+  echo "  ------   ----------   --------   -----------   --------   ---------"
+
+  foreach rl 120 1e9 1k 60
+    alter Rterm_b = $rl
+    run
+    echo "  R_L = $rl"
+    * peak far-end differential during the first 2 us after the edge
+    meas tran vdb_pk  MAX v(vdb) FROM=11u TO=13u
+    * settled far-end value, after all reflections have died
+    meas tran vdb_set FIND v(vdb) AT=16u
+    * peak at the near end - shows the returning reflection
+    meas tran vda_pk  MAX v(vda) FROM=12u TO=15u
+    * receiver output at the sample instant
+    meas tran rx_samp FIND v(rxb_a) AT=16u
+  end
+
+  echo ""
+  echo "================ PREDICTED ================"
+  echo "  R_L=120  Gamma  0.000   far-end peak 2.00 V   clean"
+  echo "  R_L=open Gamma +1.000   far-end peak 4.00 V   doubling"
+  echo "  R_L=1k   Gamma +0.786   far-end peak 3.57 V"
+  echo "  R_L=60   Gamma -0.333   far-end peak 1.33 V   reduced"
+  echo ""
+  echo "  Sample instant is t=16us (6 us into a bit starting at 10 us)."
+  echo "  Round trip is 2.2 us, so all reflections have settled by then."
+  echo "  RX should read 0 V (dominant) in EVERY case if the settled"
+  echo "  level stays above the 0.9 V dominant threshold."
+  echo ""
+.endc
+
+.end

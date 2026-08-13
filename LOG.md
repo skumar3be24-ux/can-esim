@@ -75,3 +75,12 @@
 - Round trip 2.2704 us against PROP_SEG 2.500 us: 9.2% margin, small by design
 - PROP_SEG = 5 tq now justified by measurement rather than assumption
 - No reflections with matched 120 ohm terminations, as Gamma = 0 predicts
+
+## Day 18 - reflections and termination mismatch
+- Gamma = (R_L-Z0)/(R_L+Z0) confirmed to <0.25% for open, 1k, 120, 60 ohm
+- Open far end doubles to 3.993 V; 60 ohm inverts and reduces to 1.331 V
+- Using measured driver output (1.9964 V) reproduces all peaks to 4 sig figs
+- RX reads dominant at the sample point in ALL cases, worst margin 70%
+- Established WHY the sample point is at 75%: it is one round trip after the edge
+- My prediction that 500 pF would blunt the open-circuit peak was wrong - tau=60ns
+  is negligible against the 1.1 us transit
