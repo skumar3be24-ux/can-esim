@@ -976,3 +976,75 @@ resolved it.
 ### NGHDL "Add Files" DOES copy dependencies
 All seven dependency files were copied into DUTghdl/ by the GUI. The multi-file
 limitation was entirely in the generated build script, not the upload path.
+
+## Day 32 - MIXED-SIGNAL CAN (spice/can_mixed.cir) - milestone
+
+Two can_node_top VHDL controllers running as NGHDL models, driving the analog
+CAN physical layer characterised in Days 13-21. Roadmap scheduled this for
+Day 59; pulled forward to retire the largest project risk early.
+
+### RESULT: full protocol working across the analog/digital boundary
+
+| Measurement | Value | Meaning |
+|---|---|---|
+| clk_hi / clk_lo | 5.0 / 0.0 V | clock reaching both models |
+| rst_hi | 5.0 V | reset released |
+| busy0_hi / busy1_hi | 5.0 / 5.0 V | both nodes began transmitting |
+| arb0_max | 0.0 V | node 0 (0x0A5) never lost - it WON |
+| arb1_max | 5.0 V at 57 us | node 1 (0x123) detected the loss |
+| done0_max | 5.0 V at 385 us | node 0 frame acknowledged |
+| rxv1_max | 5.0 V at 455 us | node 1 received node 0 frame |
+
+The wired-AND is now PHYSICAL: two 45 ohm driver stages sharing one 120 ohm
+terminated differential pair. Node 1 detected its arbitration loss by reading
+back an analog level that node 0 pulled dominant, through the tanh comparator
+and an adc_bridge. Arbitration, ACK and reception all depend on the analog
+thresholds, driver on-resistance and comparator centring being right.
+
+Runtime: 5.7 s for 600 us simulated, two nodes. Note user time was 0.007 s -
+almost all of it is socket wait, confirming NGHDL cost scales with boundary
+traffic, not VHDL complexity. Pure GHDL for the same two nodes over 1.6 ms took
+8 ms. Four nodes should be entirely practical.
+
+### UPSTREAM BUG 5 - NGHDL cannot build multi-file VHDL models
+The generated start_server.sh analysed a fixed list: three packages, the single
+uploaded file, and its testbench. Any model split across several files - i.e.
+any non-trivial design - could not be built.
+
+Fixed with GHDL make mode (tools/patch_nghdl_multifile.py):
+
+  ghdl -i *.vhdl &&
+  ghdl -m -Wl,ghdlserver.o <entity>_tb &&
+
+Verified empirically before writing the patch:
+  - ghdl -e after only ghdl -i FAILS: unit has not been analyzed
+  - ghdl -m resolves an eight-file dependency chain automatically
+  - ghdl -m accepts -Wl, flags, so ghdlserver.o still links
+
+Result: 12 files analysed in dependency order and elaborated in 0.79 s. This
+also subsumes the Day 11 locale-ordering patch - make mode is order independent.
+
+### UPSTREAM BUG 6 - the entity parser does not skip comments
+model_generation.py scans EVERY line for the substrings "port" and "end",
+including comments. Our header contained "reformat the port list", which started
+the port scan inside the comment block and produced the opaque error "Please
+check the in/out direction of your port". A comment containing "end" would break
+it differently. Worked around by stripping comments from the NGHDL copies; the
+documented originals stay in vhdl/src/.
+
+### MY OWN ERROR - measuring digital nodes as analog voltages
+The first two runs reported every digital output as 0 and I nearly concluded the
+nodes were not transmitting. In fact DIGITAL EVENT NODES ARE NOT ANALOG VECTORS:
+"meas tran v(busy0_d)" does not fail loudly, it returns 0 because the vector does
+not exist. Every digital signal to be measured must be converted back through a
+dac_bridge first. The Day 11 probe test had this right and I did not carry it
+forward.
+
+The socket messages were ground truth throughout - "can_tx:0;tx_busy:1" was in
+the output all along, showing the nodes transmitting while my measurements said
+otherwise. Cross-checking the model output against the measurements is what
+resolved it.
+
+### NGHDL "Add Files" DOES copy dependencies
+All seven dependency files were copied into DUTghdl/ by the GUI. The multi-file
+limitation was entirely in the generated build script, not the upload path.

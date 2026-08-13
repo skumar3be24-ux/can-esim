@@ -297,3 +297,22 @@
   silently returns 0. Must tap through a dac_bridge first - Day 11 did this and
   I did not carry it forward. Nearly concluded the design was broken
 - NGHDL "Add Files" does copy dependencies; only the build script was limited
+
+## Day 32 - MIXED-SIGNAL CAN WORKING (Day 59 milestone, reached on Day 32)
+- Two VHDL CAN controllers as NGHDL models on the real analog PHY
+- Node 0 (0x0A5) won arbitration, node 1 (0x123) detected the loss at 57 us,
+  node 0 frame acknowledged at 385 us, node 1 received it at 455 us
+- The wired-AND is now PHYSICAL: two 45 ohm drivers on one 120 ohm pair, with
+  arbitration decided by reading back an analog level through the comparator
+- Runtime 5.7 s for 600 us with 2 nodes, nearly all socket wait (user 0.007 s).
+  Four nodes is practical. LARGEST PROJECT RISK RETIRED
+- UPSTREAM BUG 5: NGHDL could not build multi-file VHDL models. Fixed with GHDL
+  make mode; 12 files now analyse in dependency order in 0.79 s. Also subsumes
+  the Day 11 locale patch
+- UPSTREAM BUG 6: the entity parser scans comments for "port" and "end". Our
+  comment said "reformat the port list" and broke the parse. Stripped comments
+  from the NGHDL copies
+- MY ERROR: digital event nodes are NOT analog vectors. meas tran v(busy0_d)
+  silently returns 0. Must tap through a dac_bridge first - Day 11 did this and
+  I did not carry it forward. Nearly concluded the design was broken
+- NGHDL "Add Files" does copy dependencies; only the build script was limited
