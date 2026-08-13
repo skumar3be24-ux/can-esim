@@ -365,3 +365,56 @@ I had modelled both directions as symmetric. They are not.
 A cycle-by-cycle probe testbench (vhdl/tb/tb_probe.vhdl) resolved
 in one run what two rounds of confident reasoning got wrong.
 Instrument before theorising.
+
+## Day 23 - Bit stuffing / destuffing (vhdl/src/bit_stuff.vhdl)
+
+After FIVE consecutive identical bits the transmitter inserts one bit of
+opposite polarity; the receiver discards it. This guarantees an edge at least
+every six bit times, which is what gives the Day 22 resync logic something to
+lock onto. The two modules are directly coupled.
+
+### VERIFIED - 5 of 7 planned checks pass
+
+| # | Check | Result |
+|---|---|---|
+| 1 | no stuffing for runs below 5 | 0 stuff bits |
+| 2 | one stuff bit after exactly 5 | 1 bit, opposite polarity |
+| 4 | destuffer removes a correct stuff bit | 6 payload from 7 fed |
+| 6 | six identical bits | stuff_err raised |
+| 7 | stuffing disabled | 0 stuff bits |
+
+### NOT YET VERIFIED - deferred to Day 24
+  Check 3: consecutive stuffing (5 identical, stuff, 5 more -> 2nd stuff bit).
+           A stuffed bit must RESET the run count to 1, because the stuffed bit
+           itself is the first bit of the next run.
+  Check 5: ROUND TRIP - stuff a pattern, feed it to the destuffer, assert the
+           recovered stream equals the original. This is the check that catches
+           stuffer/destuffer disagreement. Both paths are currently verified
+           only in ISOLATION. The module is NOT fully verified until this runs.
+
+### SCOPE - where implementations commonly go wrong
+Stuffing applies from SOF through the CRC SEQUENCE only. It does NOT apply to
+CRC delimiter, ACK slot, ACK delimiter, EOF, or interframe space - those are
+fixed-form fields and a stuff bit there is a protocol violation. The module
+takes an explicit stuff_en input rather than inferring the field.
+
+### ERROR CONDITION
+Six identical bits is a STUFF ERROR. Not an edge case: error frames are
+deliberately six dominant bits, so the destuffer must REPORT it rather than
+silently resynchronise. Feeds the Phase 5 error handling.
+
+### BUG - the SAME unresolved-signal error as Day 22
+err_count and recv_len are INTEGERS driven from both the cap process and stim.
+integer is UNRESOLVED, so two drivers is an elaboration error. I had written a
+LOG entry about this exact rule the previous day and still repeated it.
+Fixed with a clr_counters request signal so cap remains the sole driver.
+
+Rule: a signal gets ONE driver per process, and a process that assigns it
+anywhere creates a driver whether or not that branch runs. std_logic is
+RESOLVED (a resolution function arbitrates - this is how the wired-AND bus is
+modelled). integer, boolean and enumerated types are UNRESOLVED.
+
+### PROCESS NOTE - Day 22 lesson applied successfully
+All stimulus driven on the FALLING edge, all sampling on the RISING edge. Both
+failure points I predicted in advance (tx_stall registration timing, the
+payload-bit count) were fine. The delta-cycle discipline worked.

@@ -132,3 +132,16 @@
 - Two false alarms: a testbench delta-cycle error and a wrong expected value.
   I rewrote correct RTL twice before instrumenting. Added tb_probe.vhdl
 - Learned: boolean/integer are UNRESOLVED, two drivers = elaboration error
+
+## Day 23 - bit stuffing / destuffing
+- bit_stuff.vhdl: insert after 5 identical bits, discard on receive, flag 6 as error
+- 5 of 7 checks pass: no-stuff-below-5, one-stuff-at-5, discard, error, disabled
+- DEFERRED to Day 24: consecutive stuffing and the full ROUND TRIP. Both paths
+  are currently verified only in isolation - not fully verified until round trip
+- Explicit stuff_en input: stuffing covers SOF..CRC only, not the fixed-form
+  fields (CRC delim, ACK, EOF, interframe)
+- Repeated the Day 22 unresolved-signal bug on err_count/recv_len despite having
+  logged the rule the day before. Fixed with a clear-request signal
+- Falling-edge stimulus / rising-edge sampling worked: both predicted failure
+  points came out clean on the first run
+- Removed bt_fix.py and bt_fix2.py from the repo; patch scripts now go to /tmp
