@@ -196,8 +196,15 @@ begin
           -- this bit MUST be the opposite of the run
           if rx_bit_in = rx_last then
             -- six identical bits -> STUFF ERROR
+            -- Day 28: this increment was unclamped. The Day 23 test
+            -- fed exactly six bits and stopped, so the branch never
+            -- ran twice. A real corrupted stream keeps going and the
+            -- counter overflowed its 1..8 range. Clamp it: once the
+            -- error is flagged the exact count no longer matters.
             stuff_err_r <= '1';
-            rx_same_cnt <= rx_same_cnt + 1;
+            if rx_same_cnt < STUFF_LEN + 1 then
+              rx_same_cnt <= rx_same_cnt + 1;
+            end if;
             rx_last     <= rx_bit_in;
           else
             -- correct stuff bit: discard it, start a new run

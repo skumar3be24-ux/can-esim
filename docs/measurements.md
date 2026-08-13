@@ -666,3 +666,71 @@ against the PAYLOAD directly, which located the dropped bit in one run.
 - The capture window overruns the frame by one idle slot, so the length check
   now requires the captured stream to CONTAIN the expected one from SOF, with
   trailing recessive slots allowed - which is what a real receiver sees.
+
+## Day 28 - Receive path decoder (vhdl/src/frame_rx.vhdl)
+
+Decodes the bus stream produced by the Day 27 transmitter: destuffs via the
+verified bit_stuff receive side, walks the frame fields, computes and compares
+the CRC, and extracts ID / RTR / DLC / data.
+
+### RESULT: 20 of 20 frames decoded correctly, 3 of 3 error paths fire
+
+| Test | Result |
+|---|---|
+| 20 frames from frame_vectors.txt | ID, DLC, data all correct, CRC matched |
+| Injection A: flipped identifier bit | crc_err raised, rx_done suppressed |
+| Injection B: dominant bit in EOF | form_err raised, rx_done suppressed |
+| Injection C: six identical bits | stuff_err raised |
+
+The 20 clean frames close the loop with Day 27: the transmitter builds these
+exact bus streams and the receiver decodes them back to the original fields, so
+the two halves of the protocol agree.
+
+Injection A is the one that matters. A decoder that never actually compares the
+CRC would pass all 20 clean frames. A single flipped identifier bit must produce
+a mismatch, and it does.
+
+### RTL BUG 1 - stale data across frames
+A remote frame (RTR=1) has no data field, so frame_rx never wrote data_r and it
+retained the payload of the PREVIOUS frame. Frame 8 in the vector set is an RTR
+frame immediately after the all-ones DLC 8 frame, and it reported all ones.
+Fixed by clearing id_r / dlc_r / data_r at SOF.
+
+This only surfaced because of the vector ORDERING - an all-ones frame directly
+before a remote frame. A different order would have passed and shipped. Argument
+for keeping targeted cases adjacent rather than shuffled.
+
+### RTL BUG 2 - third counter overflow in bit_stuff, same shape as the first two
+The stuff-ERROR branch incremented rx_same_cnt without a clamp. The Day 23 test
+fed exactly six identical bits and stopped, so the branch never ran twice. A real
+corrupted stream keeps going and the counter overflowed its 1..8 range.
+
+Clamped at STUFF_LEN+1, NOT STUFF_LEN - the destuffer must still be able to
+reach six identical bits to raise stuff_err at all.
+
+PATTERN, worth naming: all three bit_stuff overflows are the same defect class -
+a counter that behaves on well-formed input and runs away on a path the isolated
+tests never reached (Day 27: fixed-form fields with stuffing disabled; Day 27:
+the same on the receive side; Day 28: the error branch). Range-constrained
+integers in VHDL are a good bug detector precisely because they trap this.
+
+### TWO VHDL LANGUAGE ISSUES
+1. IDENTIFIERS ARE CASE-INSENSITIVE. The state enum value RX_ID collided with the
+   port rx_id - same identifier as far as VHDL is concerned. Renamed all states
+   to S_*. frame_gen used ST_* and never hit this.
+2. A case expression needs a locally static subtype in VHDL-93, so
+   "case dlc_r(3 downto 1) & bit_in is" is illegal. Moved the concatenation into
+   a variable. The rewrite also replaced a nine-way case with
+   to_integer(unsigned(...)) and a DLC>8 clamp.
+
+### DESIGN NOTE - combinational stuff_en
+stuff_en is driven combinationally from the decoder state, not registered.
+The destuffer needs it DURING the bit slot; a registered version arrives a slot
+late and the destuffer would try to destuff the fixed-form fields. Direct
+application of the Day 27 back-pressure lesson.
+
+### NOT YET IMPLEMENTED
+No ACK generation - the receiver should drive dominant in the ACK slot (Day 29).
+No error frames, no error counters, no extended identifiers, no overload frames.
+frame_rx currently ignores stuff_err rather than aborting the frame; wiring that
+in is Phase 5.

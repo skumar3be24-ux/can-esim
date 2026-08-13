@@ -207,3 +207,23 @@
   stream from the start. RULE: never reimplement a reference model inverse
 - After five days of "it is always the testbench" I had stopped considering the
   DUT could be wrong. Today it was, twice
+
+## Day 28 - receive path decoder (Phase 4 begins)
+- frame_rx.vhdl decodes the bus stream back to ID / RTR / DLC / data
+- 20 of 20 frames decoded correctly against the reference vectors
+- All 3 error paths verified: crc_err on a flipped bit, form_err on a dominant
+  EOF bit, stuff_err on six identical bits
+- Closes the loop with Day 27: TX builds these streams, RX decodes them back
+- RTL BUG: remote frames left the PREVIOUS frame data in rx_data, because an
+  RTR frame has no data field and nothing cleared it. Fixed by clearing at SOF.
+  Only surfaced because an all-ones frame preceded the RTR frame in the vectors
+- RTL BUG: third bit_stuff counter overflow, this time in the stuff-error branch.
+  Same class as the other two - fine on well-formed input, runs away on a path
+  the isolated tests never reached. Clamped at STUFF_LEN+1 so six identical bits
+  can still be detected
+- VHDL: identifiers are CASE-INSENSITIVE, so state RX_ID collided with port
+  rx_id. Renamed states to S_*
+- VHDL: case expressions need a locally static subtype, so a concatenation must
+  go through a variable first
+- stuff_en driven combinationally from state, per the Day 27 lesson
+- STILL MISSING: ACK generation, error frames, abort on stuff_err
