@@ -107,3 +107,15 @@
 - Derived max length per rate for our 5/16 PROP_SEG: 220 m / 32.5 m / 1.25 m
 - Documented why these fall short of real CAN: allocation must be re-derived
   per rate, real high-rate timing uses a much larger PROP_SEG fraction
+
+## Day 21 - PHY documentation freeze
+- Consolidated Days 13-20 into docs/phy_spec.md as a frozen specification
+- All parameters, canonical models, derivations, and verified results in one place
+- Model limitations stated explicitly: no CM input range on the tanh comparator,
+  transceiver too fast (21.6 ns vs 100-255 ns real), ideal lossless line,
+  tolerances modelled in one test only, no bus faults or EMI
+- Wrote spice/run_phy_regression.sh - re-runs 4 netlists, checks 17 measurements
+  against frozen values at 0.1% (voltage) and 1% (time) tolerance
+- Interface contract for the VHDL controller recorded: 2 MHz clock, 16 cycles per
+  bit, sample at cycle 12, tx/rx polarity, 35 ns loop delay, wired-AND bus
+- PHY IS NOW FROZEN. Phase 3 (CAN controller) begins.
