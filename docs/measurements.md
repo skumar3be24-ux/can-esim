@@ -1292,3 +1292,52 @@ holds bit for bit.
 The NGHDL model must be regenerated whenever the VHDL changes - DUTghdl holds
 copies, not references. The GUI Add Files dialog handles all nine dependencies,
 and the Day 32 multi-file patch analyses them in dependency order.
+
+## Day 38 - FOUR-NODE ARBITRATION on the analog PHY
+
+The roadmap target configuration: four CAN controllers all requesting the bus at
+the same instant, arbitrating over one differential pair.
+
+### RESULT: correct winner, correct ORDER, non-destructive
+
+| Node | ID | Lost at | Delta |
+|---|---|---|---|
+| A | 0x0A5 | never - WON | - |
+| D | 0x555 | 40.5 us | - |
+| C | 0x2AA | 48.5 us | +8.0 us |
+| B | 0x123 | 57.0 us | +8.5 us |
+
+THE LOSSES ARE EXACTLY ONE BIT TIME APART - 8 us at 125 kbit/s - matching D at
+id(10), C at id(9), B at id(8). Not merely "all three lost", but each losing at
+the precise bit its identifier predicts. Deriving that order from the ID bit
+patterns beforehand and then measuring it is the strongest arbitration evidence
+in the project.
+
+  doneA = 5 V        the winner frame was acknowledged
+  rxvB = rxvC = rxvD = 5 V   ALL THREE LOSERS received the winner frame
+  efA = efB = 0      no error frames - a clean contest
+
+NON-DESTRUCTIVE ARBITRATION PROVEN WITH THREE SIMULTANEOUS LOSERS. The collision
+cost zero bandwidth and every loser became a working receiver within the same
+frame. With one loser (Day 32) a partial release might still work by luck; with
+three, any node holding the bus a moment too long would destroy the frame.
+
+### PERFORMANCE
+15.2 s for 600 us with four nodes, against 5.7 s for two. Scaling is roughly
+linear in instance count as predicted - the cost is boundary traffic and the
+per-instance VHDL rebuild, not simulation complexity. Note each instance
+recompiles the model independently (4 elaborations in the log), which is most of
+the wall time.
+
+### A MEASUREMENT BUG THAT HAD BEEN SILENT SINCE DAY 32
+  Error: measure vdiff_dom (TRIG) : no such vector as Zv(canh)-v(canl)Z
+
+meas cannot take an EXPRESSION, only a real vector. The differential bus
+measurement in can_mixed.cir has been failing quietly since Day 32 and I did not
+notice because the digital results were what I was reading. Fixed in both
+netlists by computing the difference into a node with a B-source, which is what
+the Day 13-20 PHY netlists did correctly.
+
+Worth noting the pattern: ngspice reports the failure but continues, so a broken
+measurement looks like a missing line rather than an error. Also ngspice
+LOWERCASES node names, which is why the first grep for arbA found nothing.

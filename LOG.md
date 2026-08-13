@@ -384,3 +384,17 @@
   stuffing, CRC, framing, arbitration, ACK, error frames, fault confinement
 - Reminder: DUTghdl holds COPIES, so the model must be regenerated after any
   VHDL change
+
+## Day 38 - four-node arbitration on the analog PHY
+- Roadmap target configuration reached: 4 controllers contending on one pair
+- A (0x0A5) won; D lost at 40.5 us, C at 48.5 us, B at 57.0 us
+- The losses are EXACTLY one bit time apart (8 us), matching D at id(10), C at
+  id(9), B at id(8). Order derived from the ID bits beforehand, then measured
+- All three losers RECEIVED the winner frame (rxvB/C/D = 5) and no error frames
+  fired. Non-destructive arbitration proven with three simultaneous losers
+- Performance: 15.2 s for 600 us with 4 nodes vs 5.7 s with 2. Roughly linear,
+  and most of it is the per-instance VHDL rebuild
+- Found a measurement bug silent since Day 32: meas cannot take an expression
+  like v(canh)-v(canl), only a real vector. Fixed with a B-source node in both
+  netlists. ngspice reports it but continues, so it looked like a missing line
+- ngspice lowercases node names - grep for arbA finds nothing, arba works

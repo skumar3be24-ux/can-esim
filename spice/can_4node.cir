@@ -1,0 +1,224 @@
+CAN mixed-signal - FOUR nodes contending on the analog PHY (Day 38)
+* ============================================================
+* The roadmap target configuration: four CAN controllers, all
+* requesting the bus simultaneously, arbitrating over a real
+* differential pair.
+*
+* IDENTIFIERS AND EXPECTED LOSS ORDER
+*
+*           id(10) ......... id(0)
+*   A 0x0A5   0 0 0 1 0 1 0 0 1 0 1    id_sel 00
+*   B 0x123   0 0 1 0 0 1 0 0 0 1 1    id_sel 01
+*   C 0x2AA   0 1 0 1 0 1 0 1 0 1 0    id_sel 10
+*   D 0x555   1 0 1 0 1 0 1 0 1 0 1    id_sel 11
+*
+*   id(10): D sends recessive against three dominant -> D LOSES
+*   id(9) : C sends recessive against A and B dominant -> C LOSES
+*   id(8) : B sends recessive against A dominant      -> B LOSES
+*   A wins and transmits to completion.
+*
+* WHY THIS IS THE REAL TEST
+*   Three simultaneous losers must all release the bus cleanly
+*   without corrupting the winner's frame. With one loser (Day 32)
+*   a partial release might still work by luck; with three, any
+*   node that holds the bus a moment too long destroys the frame.
+*
+*   It is also the performance measurement: four NGHDL instances
+*   mean four socket servers and four times the boundary traffic.
+*   The Day 32 two-node run took 5.7 s for 600 us.
+*
+* FROZEN PARAMETERS - docs/phy_spec.md
+*   125 kbit/s, 2.000 MHz clock, 16 tq, R_on 45 ohm,
+*   120 ohm x2 termination, comparator centred 0.7 V
+* ============================================================
+
+.param VCC_V = 5.0
+.param RON   = 45
+
+Vcc  vcc  0 DC {VCC_V}
+Vref vref 0 DC 2.5
+
+* ============ 2.000 MHz clock ============
+Vclk clk_a 0 PULSE(0 5 0 5n 5n 245n 500n)
+Rclk clk_a 0 1meg
+
+* ============ reset ============
+Vrst rst_a 0 PWL(0 0  1.9u 0  2.0u 5)
+Rrst rst_a 0 1meg
+
+* ============ all four request at the same instant ============
+Vreq req_a 0 PWL(0 0  10.0u 0  10.1u 5  10.6u 5  10.7u 0)
+Rreq req_a 0 1meg
+
+* ============ id_sel constants: 00 01 10 11 ============
+VsA1 selA1 0 DC 0
+VsA0 selA0 0 DC 0
+VsB1 selB1 0 DC 0
+VsB0 selB0 0 DC 5
+VsC1 selC1 0 DC 5
+VsC0 selC0 0 DC 0
+VsD1 selD1 0 DC 5
+VsD0 selD0 0 DC 5
+RsA1 selA1 0 1meg
+RsA0 selA0 0 1meg
+RsB1 selB1 0 1meg
+RsB0 selB0 0 1meg
+RsC1 selC1 0 1meg
+RsC0 selC0 0 1meg
+RsD1 selD1 0 1meg
+RsD0 selD0 0 1meg
+
+* ============ bridges ============
+.model adcmod adc_bridge(in_low=1.5 in_high=3.5)
+.model dacmod dac_bridge(out_low=0 out_high=5 out_undef=2.5
++                        t_rise=20n t_fall=20n)
+
+Aclk [clk_a] [clk_d] adcmod
+Arst [rst_a] [rst_d] adcmod
+Areq [req_a] [req_d] adcmod
+
+AsA1 [selA1] [selA1_d] adcmod
+AsA0 [selA0] [selA0_d] adcmod
+AsB1 [selB1] [selB1_d] adcmod
+AsB0 [selB0] [selB0_d] adcmod
+AsC1 [selC1] [selC1_d] adcmod
+AsC0 [selC0] [selC0_d] adcmod
+AsD1 [selD1] [selD1_d] adcmod
+AsD0 [selD0] [selD0_d] adcmod
+
+Arx [rx_ana] [rx_d] adcmod
+
+* ============ the four controllers ============
+* ports: clk reset_n can_rx tx_req id_sel(2) | can_tx tx_busy
+*        tx_done arb_lost rx_valid err_frame bus_off
+aA [clk_d] [rst_d] [rx_d] [req_d] [selA1_d selA0_d]
++  [txA_d] [busyA_d] [doneA_d] [arbA_d] [rxvA_d]
++  [efA_d] [boA_d] nodeA
+.model nodeA can_node_top(rise_delay=1.0e-9 fall_delay=1.0e-9
++                         input_load=1.0e-12 instance_id=1)
+
+aB [clk_d] [rst_d] [rx_d] [req_d] [selB1_d selB0_d]
++  [txB_d] [busyB_d] [doneB_d] [arbB_d] [rxvB_d]
++  [efB_d] [boB_d] nodeB
+.model nodeB can_node_top(rise_delay=1.0e-9 fall_delay=1.0e-9
++                         input_load=1.0e-12 instance_id=2)
+
+aC [clk_d] [rst_d] [rx_d] [req_d] [selC1_d selC0_d]
++  [txC_d] [busyC_d] [doneC_d] [arbC_d] [rxvC_d]
++  [efC_d] [boC_d] nodeC
+.model nodeC can_node_top(rise_delay=1.0e-9 fall_delay=1.0e-9
++                         input_load=1.0e-12 instance_id=3)
+
+aD [clk_d] [rst_d] [rx_d] [req_d] [selD1_d selD0_d]
++  [txD_d] [busyD_d] [doneD_d] [arbD_d] [rxvD_d]
++  [efD_d] [boD_d] nodeD
+.model nodeD can_node_top(rise_delay=1.0e-9 fall_delay=1.0e-9
++                         input_load=1.0e-12 instance_id=4)
+
+* ============ measurement taps ============
+* digital event nodes are NOT analog vectors - convert first
+AmaA [arbA_d] [arbA_a] dacmod
+AmaB [arbB_d] [arbB_a] dacmod
+AmaC [arbC_d] [arbC_a] dacmod
+AmaD [arbD_d] [arbD_a] dacmod
+AmdA [doneA_d] [doneA_a] dacmod
+AmrB [rxvB_d] [rxvB_a] dacmod
+AmrC [rxvC_d] [rxvC_a] dacmod
+AmrD [rxvD_d] [rxvD_a] dacmod
+AmeA [efA_d] [efA_a] dacmod
+AmeB [efB_d] [efB_a] dacmod
+AmbA [busyA_d] [busyA_a] dacmod
+RmaA arbA_a 0 1meg
+RmaB arbB_a 0 1meg
+RmaC arbC_a 0 1meg
+RmaD arbD_a 0 1meg
+RmdA doneA_a 0 1meg
+RmrB rxvB_a 0 1meg
+RmrC rxvC_a 0 1meg
+RmrD rxvD_a 0 1meg
+RmeA efA_a 0 1meg
+RmeB efB_a 0 1meg
+RmbA busyA_a 0 1meg
+
+* ============ four driver stages on ONE pair ============
+AdacA [txA_d] [txA_a] dacmod
+AdacB [txB_d] [txB_a] dacmod
+AdacC [txC_d] [txC_a] dacmod
+AdacD [txD_d] [txD_a] dacmod
+
+BdrvA ctrlA 0 V = 5 - V(txA_a)
+BdrvB ctrlB 0 V = 5 - V(txB_a)
+BdrvC ctrlC 0 V = 5 - V(txC_a)
+BdrvD ctrlD 0 V = 5 - V(txD_a)
+
+.model swmod SW(Vt=2.5 Vh=0.2 Ron={RON} Roff=1e9)
+
+ShA vcc  canh ctrlA 0 swmod
+SlA canl 0    ctrlA 0 swmod
+ShB vcc  canh ctrlB 0 swmod
+SlB canl 0    ctrlB 0 swmod
+ShC vcc  canh ctrlC 0 swmod
+SlC canl 0    ctrlC 0 swmod
+ShD vcc  canh ctrlD 0 swmod
+SlD canl 0    ctrlD 0 swmod
+
+* ============ bus ============
+Rterm_a canh canl 120
+Rterm_b canh canl 120
+Rbias1  canh vref 10k
+Rbias2  canl vref 10k
+Cbush   canh 0 500p
+Cbusl   canl 0 500p
+Rleak1  canh 0 100meg
+Rleak2  canl 0 100meg
+
+Bdiff vdiff 0 V = V(canh) - V(canl)
+Rdiff vdiff 0 1meg
+Bcomp rx_ana 0 V = 2.5*(1 - tanh(10*(V(canh)-V(canl)-0.7)))
+Rcomp rx_ana 0 1meg
+
+.tran 100n 600u
+
+.control
+  run
+
+  echo ""
+  echo "============ FOUR-NODE ARBITRATION ============"
+  echo ""
+  echo "--- who lost? (5 V = lost arbitration) ---"
+  meas tran arbA MAX v(arbA_a) FROM=10u TO=600u
+  meas tran arbB MAX v(arbB_a) FROM=10u TO=600u
+  meas tran arbC MAX v(arbC_a) FROM=10u TO=600u
+  meas tran arbD MAX v(arbD_a) FROM=10u TO=600u
+  echo ""
+  echo "--- when did each loss occur? ---"
+  meas tran tD WHEN v(arbD_a)=2.5 RISE=1
+  meas tran tC WHEN v(arbC_a)=2.5 RISE=1
+  meas tran tB WHEN v(arbB_a)=2.5 RISE=1
+  echo ""
+  echo "--- did the winner complete? ---"
+  meas tran doneA MAX v(doneA_a) FROM=10u TO=600u
+  echo ""
+  echo "--- did the losers receive the winner's frame? ---"
+  meas tran rxvB MAX v(rxvB_a) FROM=10u TO=600u
+  meas tran rxvC MAX v(rxvC_a) FROM=10u TO=600u
+  meas tran rxvD MAX v(rxvD_a) FROM=10u TO=600u
+  echo ""
+  echo "--- any error frames? (must be 0) ---"
+  meas tran efA MAX v(efA_a) FROM=10u TO=600u
+  meas tran efB MAX v(efB_a) FROM=10u TO=600u
+  echo ""
+  echo "--- bus levels ---"
+  meas tran vdiff_dom MIN v(vdiff) FROM=20u TO=500u
+  echo ""
+  echo "============ EXPECTED ============"
+  echo "  arbA = 0     A has the lowest ID and must WIN"
+  echo "  arbB/C/D = 5 all three must detect their loss"
+  echo "  tD < tC < tB  D loses at id(10), C at id(9), B at id(8)"
+  echo "  doneA = 5    the winner's frame was acknowledged"
+  echo "  rxvB/C/D = 5 the losers received the winner's frame"
+  echo "  efA/efB = 0  no error frames - a clean contest"
+  echo ""
+.endc
+
+.end

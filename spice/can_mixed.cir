@@ -164,6 +164,8 @@ Rleak1  canh 0 100meg
 Rleak2  canl 0 100meg
 
 * ============ differential receiver ============
+Bdiff vdiff 0 V = V(canh) - V(canl)
+Rdiff vdiff 0 1meg
 Bcomp rx_ana 0 V = 2.5*(1 - tanh(10*(V(canh)-V(canl)-0.7)))
 Rcomp rx_ana 0 1meg
 
@@ -185,8 +187,8 @@ Rcomp rx_ana 0 1meg
   meas tran req_hi  MAX v(req0_chk) FROM=9u TO=12u
   echo ""
   echo "--- bus levels ---"
-  meas tran vdiff_dom  MIN  v(canh)-v(canl) FROM=20u TO=500u
-  meas tran vdiff_rec  MAX  v(canh)-v(canl) FROM=20u TO=500u
+  meas tran vdiff_dom  MIN  v(vdiff) FROM=20u TO=500u
+  meas tran vdiff_rec  MAX  v(vdiff) FROM=20u TO=500u
   echo ""
   echo "--- did the nodes transmit? ---"
   meas tran busy0_hi MAX v(busy0_a) FROM=10u TO=500u
