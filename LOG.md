@@ -355,3 +355,19 @@
   monitoring from gap 1
 - A single-bit corruption went undetected, likely because it hit an already
   dominant bit. ASSUMED, not verified
+
+## Day 36 - transmit-side bit monitoring
+- Node compares each driven bit against the bus at the sample point; mismatch is
+  a bit error worth TEC +8
+- Exceptions: arbitration field (that is arbitration loss), ACK region (dominant
+  readback is expected), and our own error frame
+- ALL THREE DAY 35 GAPS CLOSED: TEC on the transmitter went 0 -> 28, REC per
+  corrupted frame fell 17 -> 3, clean traffic still produces zero counters
+- TEC0=28 vs REC0=8 on the same node shows the CAN intent: transmitters are
+  penalised ~3.5x harder than receivers for the same fault
+- BUG (registered lag, 5th time): excluded field 0xA only, but the ACK bit is on
+  the bus while the field reads 0xB. Every acknowledged frame raised a spurious
+  bit error and normal traffic collapsed. Now suppressing 0x9..0xB
+- LIMITATION: that is deliberately conservative - a genuine bit error in the CRC
+  or ACK delimiter is now missed. Chose working traffic over an elegant fix
+- STILL OPEN: rx_err_big tied to 0; needs monitoring during our own error frame

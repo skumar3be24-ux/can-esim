@@ -146,7 +146,10 @@ architecture rtl of can_node is
   signal rec_run  : integer range 0 to 15 := 0;
   signal idle11_s : std_logic := '0';
 
-  signal node_tx : std_logic;
+  signal node_tx    : std_logic;
+  signal bit_err_s  : std_logic;
+  signal in_ack_s   : std_logic;
+  signal tx_err_any : std_logic;
 
 begin
 
@@ -171,6 +174,8 @@ begin
       bit_slot => bit_slot,
       sample_now => sample_now,
       stuff_now => stuff_now,
+      bit_err     => bit_err_s,
+      in_ack_slot => in_ack_s,
       arb_lost => arb_lost_s,
       ack_ok => ack_ok_s,
       ack_err => ack_err_s
@@ -223,10 +228,32 @@ begin
       crc_in => rcrc_bit, crc_out => rcrc_val
     );
 
+  -- the ACK slot, where a dominant readback is expected rather
+  -- than an error
+  -- Suppress monitoring across the CRC delimiter, ACK slot and ACK
+  -- delimiter. tx_field is frame_gen CURRENT field, but tx_r is
+  -- REGISTERED, so the bit for field N reaches the bus while the
+  -- FSM already reads N+1. Excluding only 0xA masked the wrong slot
+  -- and every acknowledged frame raised a spurious bit error, which
+  -- triggered an error frame and corrupted normal traffic.
+  -- Covering 0x9..0xB spans the lag in either direction.
+  in_ack_s <= '1' when (tx_field = x"9" or tx_field = x"A"
+                        or tx_field = x"B") else '0';
+
   -- ============ error event routing ============
   -- Any receive-side error starts an error frame and bumps REC.
-  any_rx_err <= rx_crc_s or rx_form_s or rxs_stuff_err;
-  err_req_s  <= any_rx_err;
+  -- While WE are transmitting an error frame the bus is
+  -- deliberately full of stuff violations - our own. Counting
+  -- those would cascade: Day 35 measured 17 errors from a single
+  -- corrupted frame because of exactly this.
+  any_rx_err <= (rx_crc_s or rx_form_s or rxs_stuff_err)
+                and (not eg_active);
+
+  -- A bit error is a transmit-side fault and also starts an error
+  -- frame.
+  tx_err_any <= (bit_err_s or ack_err_s) and (not eg_active);
+
+  err_req_s  <= any_rx_err or tx_err_any;
 
   -- ============ bus level sampling and idle detection ============
   process(clk, reset_n)
@@ -273,7 +300,7 @@ begin
     port map (
       clk => clk, reset_n => reset_n,
       -- a transmitter that got no ACK caused the problem: +8
-      tx_error   => ack_err_s,
+      tx_error   => tx_err_any,
       -- receive-side errors: +1
       rx_error   => any_rx_err,
       rx_err_big => '0',

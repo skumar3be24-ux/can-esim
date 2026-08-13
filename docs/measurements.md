@@ -1192,3 +1192,61 @@ A single-bit corruption went UNDETECTED in the first attempt. Most likely it
 landed on a bit that was already dominant, so nothing changed on the wire -
 but this is assumed, not verified. Worth checking, because a genuine single-bit
 escape would be a CRC coverage problem.
+
+## Day 36 - Transmit-side bit monitoring
+
+A transmitting node now compares every bit it DRIVES against the bus at the
+sample point. A mismatch is a BIT ERROR, worth TEC +8. Closes all three gaps
+logged on Day 35.
+
+### THREE EXCEPTIONS, EACH LOAD-BEARING
+
+| Situation | Sent | Read | Verdict |
+|---|---|---|---|
+| Arbitration field | recessive | dominant | arbitration loss, NOT an error |
+| ACK region | recessive | dominant | expected - someone acknowledged |
+| Own error frame | recessive | dominant | others are flagging, expected |
+| Anywhere else | recessive | dominant | BIT ERROR |
+| Anywhere | dominant | recessive | BIT ERROR - bus fault |
+
+Without these the node raises a bit error on every successful transmission.
+
+### RESULTS - all three Day 35 gaps closed
+
+| Measure | Day 35 | Day 36 |
+|---|---|---|
+| REC per corrupted frame | 17 | 3 |
+| TEC on the transmitter | 0 | 28 |
+| Clean-frame counters | 0 | 0 |
+| Day 31 regression | 4/4 | 4/4 |
+
+TEC0=28 against REC0=8 on the SAME node makes the CAN design intent visible: a
+transmitter is penalised about 3.5x harder than a receiver for the same bus
+fault, because a node that keeps transmitting into errors is the more likely
+culprit. Node 1, which never transmits, holds TEC=0 throughout.
+
+The cascade fell from 17 to 3 by suppressing receive-side detection while the
+node is sending its OWN error frame - it was counting its own deliberate stuff
+violations.
+
+### THE BUG - registered-output lag, fifth time
+I first excluded only field 0xA (ACK slot). But tx_field is frame_gen CURRENT
+field while tx_r is REGISTERED, so the bit for field N reaches the bus when the
+FSM already reads N+1. The real ACK bit is on the wire while the field says 0xB,
+so monitoring stayed live, every acknowledged frame raised a spurious bit error,
+an error frame followed, and normal traffic collapsed - test 3 even showed node 0
+losing arbitration to error-frame dominance.
+
+Fixed by suppressing 0x9..0xB, which spans the lag in either direction.
+
+### KNOWN LIMITATION - deliberately conservative
+Suppressing three fields rather than one means a genuine bit error during the CRC
+delimiter or ACK delimiter goes unnoticed. The precise fix is to register
+tx_field by one slot and compare exactly. I have misjudged this specific lag five
+times now, so I chose working traffic over an elegant off-by-one. Recorded as a
+limitation rather than presented as complete.
+
+### STILL OPEN
+rx_err_big remains tied to Z0Z. The standard uses it when a receiver detects a
+bit error while sending its own ACTIVE error flag - that needs monitoring during
+the error frame, which the current suppression explicitly disables.

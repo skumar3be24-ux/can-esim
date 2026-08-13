@@ -71,6 +71,9 @@ entity can_tx_path is
     bit_slot    : out std_logic;   -- one pulse per bit slot
     sample_now  : out std_logic;   -- one pulse at the sample point
     stuff_now   : out std_logic;   -- high when a stuff bit is on the bus
+    bit_err     : out std_logic;   -- pulse: transmitted bit did not
+                                   -- match the bus (bit error)
+    in_ack_slot : in  std_logic;   -- suppress monitoring here
     arb_lost    : out std_logic;   -- pulse: lost arbitration
     ack_ok      : out std_logic;   -- pulse: ACK slot was dominant
     ack_err     : out std_logic    -- pulse: nobody acknowledged
@@ -93,6 +96,7 @@ architecture rtl of can_tx_path is
   signal fg_active   : std_logic;
   signal fg_arblost  : std_logic;
   signal fg_in_arb   : std_logic;
+  signal biterr_s    : std_logic;
   signal arb_abort_s : std_logic;
   signal driven_bit  : std_logic;
   signal fg_ack_ok   : std_logic;
@@ -137,6 +141,18 @@ begin
   -- a competing node's dominant bit takes 1.1 us to arrive (Day 17);
   -- the sample point sits 6 us into the bit precisely to allow that.
   driven_bit  <= st_bit_out when fg_active = '1' else '1';
+  -- ============ transmit-side bit monitoring ============
+  -- Compare what we drive with what the bus actually shows, at the
+  -- sample point. Excluded: the arbitration field (a mismatch there
+  -- is arbitration loss), the ACK slot (a mismatch there is a
+  -- successful acknowledgement), and any field where we are not
+  -- driving at all.
+  biterr_s <= '1' when (sample_pt = '1' and fg_active = '1'
+                        and fg_in_arb = '0'
+                        and in_ack_slot = '0'
+                        and driven_bit /= can_rx)
+              else '0';
+
   arb_abort_s <= '1' when (sample_pt = '1' and fg_active = '1'
                            and fg_in_arb = '1'
                            and driven_bit = '1' and can_rx = '0')
@@ -224,6 +240,7 @@ begin
   bit_slot     <= bit_start;
   sample_now   <= sample_pt;
   stuff_now    <= st_stall;
+  bit_err      <= biterr_s;
   arb_lost     <= fg_arblost;
   ack_ok       <= fg_ack_ok;
   ack_err      <= fg_ack_err;
