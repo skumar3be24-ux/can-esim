@@ -467,3 +467,16 @@
 - Description trimmed to 693 chars for the 500-700 limit; full detail is in the
   attached PDF (docs/CANBusProposal.pdf)
 - Reference field wants LINKS, so used the public Bosch CAN 2.0 spec URL
+
+## Day 42 (cont) - eSim subcircuit path solved
+- eSim classifies a component as a subcircuit purely by reference designator:
+  SubcircuitTab.py line 65, "if eachline[0] == Zx Z". Any part named X1, X2 etc.
+- So the Subcircuit BUILDER is not needed. We cannot draw can_phy anyway - it
+  contains B-sources and SW switches with no KiCad symbols
+- Correct path: place any 5-pin symbol, set reference to X1, and attach
+  spice/can_phy.sub via the Subcircuits tab during Ki-to-Ng conversion
+- eSim project created at ~/eSim-Workspace/CAN_Bus_MixedSignal/ (eSim uses its
+  own workspace, not the folder you pick for the repo)
+- The earlier python3.10 crash was NOT disk this time (57 GB free) and left no
+  traceback - a one-off. The "please select the project first" message that
+  followed was a separate, expected condition
