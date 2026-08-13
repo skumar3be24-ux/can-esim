@@ -425,3 +425,18 @@
   5.626 ms, so it included legitimate transmission and returned 5 V regardless of
   the fix. A measurement that gives the same answer for fixed and broken proves
   nothing. Second instance this week after the Day 38 vdiff expression bug
+
+## Day 41 - Verification matrix and handoff refresh
+- docs/verification.md: every test in the project in one table - 16 PHY checks,
+  15 digital, 14 receive/ACK/arbitration, 18 error handling, 12 mixed-signal
+- Marked the DISCRIMINATING tests explicitly: R6 (no receiver -> ack_err), R10
+  (B wins with A absent), R14 (no self-ACK), D12 (round trip), D13 (417 vectors),
+  M7 (loss order one bit time apart). Each would fail if the mechanism were
+  hardwired to succeed
+- NOT COVERED section is explicit rather than omitted: extended IDs, overload
+  frames, retransmission, rx_err_big in integration, bit errors in the CRC/ACK
+  delimiter, independent oscillators, REC 119-127 band, transceiver CM range,
+  bus faults other than the differential short
+- docs/handoff.md rewritten - it still described Day 1 (no VHDL written, mixed
+  signal unproven). Now reflects a complete verified protocol
+- Recorded the six upstream eSim/NGHDL bugs in one place for submission
