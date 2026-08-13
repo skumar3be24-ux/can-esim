@@ -1095,3 +1095,45 @@ shouting when it should have stopped.
    success when both pulse in the same cycle. Arguably correct, but it was an
    implicit consequence of the coding style rather than a deliberate decision,
    and the testbench never pulses two at once.
+
+## Day 34 - Error frame generation (vhdl/src/error_gen.vhdl)
+
+Six-bit error flag followed by an eight-bit recessive delimiter.
+
+### RESULT: 5 of 5 checks pass, first run
+
+| Check | Result |
+|---|---|
+| 1 error-active flag | 6 DOMINANT bits |
+| 2 delimiter | 8 RECESSIVE bits |
+| 3 error-passive flag | 0 dominant bits driven |
+| 4 superposition | stayed in the frame while the bus was dominant, completed when it released |
+| 5 stuck bus | bounded wait, reported, did not hang |
+
+### THE PROPAGATION MECHANISM
+Six identical bits deliberately violate the stuffing rule (maximum five), so
+every other node detects a STUFF ERROR and sends its own flag. A node destroys a
+frame by triggering everyone else stuff-error detector - the same detector built
+in bit_stuff on Day 23. The error frame and the stuff check are two halves of one
+design.
+
+### CHECK 3 IS THE FAULT-CONFINEMENT TEST
+An error-passive node sends six RECESSIVE bits, which contribute nothing to a
+wired-AND bus. A degraded node signals without disrupting traffic. If it still
+drove dominant flags the entire purpose of the passive state would be defeated.
+
+### CHECK 4 SEPARATES CORRECT FROM PLAUSIBLE
+Other nodes detect the error one bit later, so their flags start later and the
+superposed dominant sequence can reach 12 bits. After its own six bits a node
+must WAIT FOR THE BUS TO GO RECESSIVE before starting the delimiter. A naive
+6-then-8 counter would place the delimiter inside another node flag. The test
+holds the bus dominant for three extra bits to force this.
+
+The wait is bounded (MAX_WAIT = 6): a bus that never releases is a stuck-dominant
+fault, reported separately rather than hung on.
+
+### DESIGN CHOICE TO VERIFY AGAINST THE STANDARD
+is_passive is LATCHED at the start of the error frame, so a node crossing the 128
+threshold mid-frame cannot flip its flag polarity halfway through. This seemed
+obviously right but I have NOT confirmed ISO 11898-1 requires it - it may be that
+the node should switch. To be checked before the report rather than assumed.

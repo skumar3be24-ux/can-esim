@@ -325,3 +325,18 @@
   are needed to undo one failure
 - NOT VERIFIED and flagged: the REC>127 reception band (we use 127), and
   simultaneous error+success in one cycle (the if/elsif favours the error)
+
+## Day 34 - error frame generation
+- error_gen.vhdl: 6-bit error flag + 8-bit recessive delimiter
+- 5 of 5 checks pass first run
+- Error-active sends 6 DOMINANT bits, which violate the stuffing rule and trigger
+  every other node stuff-error detector. That is the propagation mechanism, and
+  it reuses the Day 23 detector
+- Error-passive sends 6 RECESSIVE bits: signals without disrupting. Check 3
+  verifies zero dominant bits, which is the point of fault confinement
+- Check 4: the delimiter WAITS for the bus to go recessive rather than counting
+  6-then-8, because superposed flags from other nodes can reach 12 bits. Held the
+  bus dominant for 3 extra bits to force the case
+- Bounded wait so a stuck-dominant bus is reported, not hung on
+- TO VERIFY: I latch is_passive at frame start so polarity cannot flip mid-frame.
+  Not confirmed against ISO 11898-1 - check before the report
