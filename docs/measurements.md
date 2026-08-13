@@ -471,3 +471,55 @@ should now be "the testbench is wrong".
 round_trip feeds one extra bit after the payload loop, so stuffed_len is always
 payload + real stuff bits + 1. The reported count now subtracts it. Without that
 correction A and E showed 1 insertion where zero stuffing is possible.
+
+## Day 25 - CRC-15 (vhdl/src/crc15.vhdl, tools/crc15_ref.py)
+
+Generator polynomial x^15+x^14+x^10+x^8+x^7+x^4+x^3+1 = 0x4599.
+
+  msb = crc(14); crc = crc(13 downto 0) & Z0Z; if (msb xor bit) then crc ^= POLY
+
+Register initialises to ZERO, so an all-zero input must give an all-zero CRC.
+
+### RESULT: 417 of 417 vectors match, ZERO mismatches
+
+Verified against tools/crc15_ref.py, an INDEPENDENT Python model written from
+the ISO 11898-1 definition rather than from the RTL. Deriving the reference from
+the VHDL would make both share any misunderstanding and agree while both wrong.
+
+Vector set (seed 20260812, fully reproducible):
+  - 8 targeted edge cases: all-zero, MSB-only, LSB-only, all-ones, alternating,
+    15-bit width (same as the register), single 1, single 0
+  - 9 frames using the frozen node IDs 0x0A5 / 0x123 / 0x2AA at DLC 0, 1, 8
+  - 200 random realistic CAN frames (random ID, RTR, DLC, data)
+  - 200 random bit strings of length 1-99
+
+Sanity values from the reference:
+  all-zero x19      -> 0000   (must be zero, catches a register that never resets)
+  MSB only x19      -> 4B62
+  all-ones x19      -> 4ECB
+  ID 0x0A5 DLC 0    -> 45A4
+  ID 0x0A5 DLC 1 5A -> 59FE
+
+### COVERAGE
+SOF, identifier, RTR, IDE, r0, DLC, data field. Stops before the CRC sequence.
+CRITICAL: computed on DESTUFFED bits. Stuff bits are a physical-layer artefact
+and are never included; computing the CRC over the stuffed bus stream yields a
+value the receiver can never match.
+
+### THREE TESTBENCH ISSUES (RTL was correct throughout - 4th day running)
+1. ieee.std_logic_textio is a Synopsys extension needing -fsynopsys. Removed:
+   only read(line,integer) and read(line,character) were used, both in std.textio.
+2. Slicing a function result: hex2slv returned an UNCONSTRAINED
+   std_logic_vector, so the string literal indexes ASCENDING (0 to 3), and
+   slicing it (2 downto 0) is a direction mismatch at runtime. Fixed by
+   concatenating all four nibbles into a declared descending 16-bit variable
+   and slicing that.
+3. TIMEOUT MASQUERADING AS PASS - the important one. At 200 ns per bit and
+   ~20850 bits the run needs 4.334 ms; a 3 ms stop-time truncated it at roughly
+   vector 290. No summary printed, nothing asserted, and run.sh reported PASS.
+   Added a timeout guard process that asserts if the stimulus has not set done.
+
+   GENERAL HAZARD: every GHDL run in this project uses a fixed stop-time and
+   could in principle be silently truncated. Earlier runs all printed their
+   final PASSED line so they genuinely completed, but that was luck. Future
+   testbenches should carry a completion guard.

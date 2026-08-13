@@ -160,3 +160,17 @@
 - THIRD straight day the RTL was correct and my testbench was not. Treating
   "testbench is wrong" as the default hypothesis from here
 - bit_stuff.vhdl is now FULLY verified - Day 23 checks 3 and 5 are closed
+
+## Day 25 - CRC-15
+- crc15.vhdl: LFSR with polynomial 0x4599, register init 0
+- 417 of 417 vectors match an INDEPENDENT Python reference, zero mismatches
+- Reference written from the ISO definition, not from the RTL, so the two can
+  genuinely disagree. 400 random vectors plus 8 targeted edge cases
+- All-zero input gives 0000 as it must; ID 0x0A5 DLC 0 gives 45A4
+- CRC runs on DESTUFFED bits only - stuffed-stream CRC is unmatchable
+- Found a real verification hazard: a 3 ms stop-time truncated the run at about
+  vector 290, printed no summary, asserted nothing, and run.sh said PASS.
+  Added a timeout guard. Every fixed-stop-time run in this project shares this
+  risk
+- Two more VHDL gotchas: std_logic_textio needs -fsynopsys (dropped it), and
+  slicing an unconstrained function result mixes index directions
