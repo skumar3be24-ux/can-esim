@@ -119,3 +119,16 @@
 - Interface contract for the VHDL controller recorded: 2 MHz clock, 16 cycles per
   bit, sample at cycle 12, tx/rx polarity, 35 ns loop delay, wired-AND bus
 - PHY IS NOW FROZEN. Phase 3 (CAN controller) begins.
+
+## Day 22 - bit timing logic (Phase 3 begins)
+- bit_timing.vhdl: 16 tq per bit, sample at tq 12, hard sync + resync with SJW
+- All 6 self-checking tests pass: 16 / tq12 / hardsync / 19 / 15 / 20
+- Check 6 (SJW cap) gives 20 not 25 - the cap is real and verified
+- KEY: resync is ASYMMETRIC. Positive error lengthens PHASE_SEG1 by min(e,SJW);
+  negative error TRUNCATES PHASE_SEG2 to the edge (bit_len = tq_cnt+1), it does
+  NOT subtract |e| from the nominal length
+- One genuine RTL bug: wrap had priority over resync, swallowing every
+  negative-phase-error edge. Fixed to hard_sync > resync > wrap
+- Two false alarms: a testbench delta-cycle error and a wrong expected value.
+  I rewrote correct RTL twice before instrumenting. Added tb_probe.vhdl
+- Learned: boolean/integer are UNRESOLVED, two drivers = elaboration error

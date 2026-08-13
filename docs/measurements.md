@@ -302,3 +302,66 @@ a long bus, is wrong for high rates. Real high-rate timing allocates a much
 larger PROP_SEG fraction (8/16 or more). The correct conclusion is that the
 segment allocation must be re-derived per rate, not that CAN is limited to
 1.25 m at 1 Mbit/s.
+
+## Day 22 - Bit timing logic (vhdl/src/bit_timing.vhdl)
+
+First module of Phase 3. Divides each bit into 16 tq, generates the sample point
+at tq 12, implements hard sync and resynchronisation with SJW bounding.
+
+### VERIFIED - all 6 checks pass (vhdl/tb/tb_bit_timing.vhdl)
+
+| # | Check | Result |
+|---|---|---|
+| 1 | free-running bit period | 16 tq |
+| 2 | sample point position | tq 12 (75%) |
+| 3 | hard sync mid-bit | tq_index -> 0 |
+| 4 | edge at tq 3, e=+3 | 19 tq bit |
+| 5 | edge at tq 14, e=-2 | 15 tq bit (truncate-to-edge) |
+| 6 | edge at tq 9, e=+9, SJW=4 | 20 tq bit, NOT 25 |
+
+### KEY FINDING - resynchronisation is ASYMMETRIC
+
+I had modelled both directions as symmetric. They are not.
+
+  POSITIVE phase error (edge in PROP_SEG or PHASE_SEG1):
+    lengthen PHASE_SEG1 by min(e, SJW)
+    bit_len = BIT_TQ + corr
+    sample point ALSO moves out by corr
+
+  NEGATIVE phase error (edge in PHASE_SEG2):
+    TRUNCATE PHASE_SEG2 TO THE EDGE, bounded by SJW.
+    bit_len = tq_cnt + 1, NOT BIT_TQ - abs(e).
+    The counter is already at tq_cnt when the correction is
+    computed, so the bit cannot end before the edge that caused
+    it. An edge seen at tq 14 gives a 15 tq bit, not 14.
+    The sample point has already passed and does not move.
+
+### BUGS FOUND - 3 failures, only ONE was an RTL bug
+
+1. ELABORATION ERROR: period_valid driven from two processes.
+   boolean is UNRESOLVED, so multiple drivers is illegal at
+   elaboration. std_logic is resolved and would have been legal.
+
+2. Check 4 got 20, expected 19 - TESTBENCH BUG, not RTL.
+   "wait until rising_edge(clk) and tq_index = n" returns AT that
+   edge; an assignment after it lands in the NEXT delta, so the
+   DUT sees the edge at tq n+1. Injecting at tq 3 was seen at
+   tq 4, so e was +4 and a 20 tq bit was CORRECT.
+   I rewrote the working RTL TWICE before instrumenting.
+
+3. Check 5 got 16 - GENUINE RTL BUG. Branch priority was
+   hard_sync > WRAP > resync. A negative-phase-error edge arrives
+   in PHASE_SEG2 near the end of the bit, exactly where the wrap
+   condition is already true, so the wrap swallowed the edge and
+   the correction never applied. Fixed to hard_sync > RESYNC >
+   wrap. This would have survived into the full controller and
+   appeared much later as nodes failing to hold sync when running
+   fast.
+
+4. Check 5 then got 15, expected 14 - MY EXPECTATION was wrong,
+   per the truncate-to-edge rule above.
+
+### PROCESS NOTE
+A cycle-by-cycle probe testbench (vhdl/tb/tb_probe.vhdl) resolved
+in one run what two rounds of confident reasoning got wrong.
+Instrument before theorising.
