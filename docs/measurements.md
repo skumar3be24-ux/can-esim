@@ -604,3 +604,65 @@ it immediately.
 Added .gitignore for vhdl/*_vectors.txt, vhdl/*.vcd and vhdl/work-obj93.cf, and
 untracked crc_vectors.txt. Generated artefacts are reproducible from the tools
 with fixed seeds and do not belong in the repo.
+
+## Day 27 - Transmit datapath integration (vhdl/src/can_tx_path.vhdl)
+
+Wires bit_timing, frame_gen, crc15 and bit_stuff into a complete transmit path.
+First integration in the project, and the first back-pressure relationship.
+
+### RESULT: 6 of 6 frames bit-exact on the bus at 125 kbit/s
+
+| Frame | Payload | Stuff bits | Bus bits |
+|---|---|---|---|
+| 1 ID 0x0A5 DLC 0 | 47 | 1 | 48 |
+| 2 ID 0x123 DLC 0 | 47 | 1 | 48 |
+| 3 ID 0x2AA DLC 0 | 47 | 2 | 49 |
+| 4 ID 0x0A5 DLC 1 | 55 | 2 | 57 |
+| 5 ID 0x0A5 DLC 8 | 111 | 2 | 113 |
+| 6 all-zero DLC 8 | 111 | 16 | 127 |
+
+Frame 6 is decisive: an all-zero 8-byte payload needs 16 stuff bits, every one
+correctly placed with no payload bit lost. Timing measured 1.040 ms for 127 bits,
+against 1.016 ms theoretical at 8.000 us per bit - real 125 kbit/s.
+
+### TWO GENUINE RTL BUGS, BOTH INVISIBLE TO ISOLATED TESTING
+
+1. RUN-COUNTER OVERFLOW (bit_stuff). The fixed-form fields at the end of a frame
+   are 13 consecutive recessive bits - CRC delimiter, ACK, ACK delimiter, 7 EOF,
+   3 IFS - transmitted with stuffing DISABLED. Nothing reset the run counter, so
+   it climbed past its 1..8 range and hit a bound check. Isolated tests only ever
+   exercised enabled runs. Fixed by clearing the count when stuffing is disabled
+   and clamping it: at STUFF_LEN on the transmit side, at STUFF_LEN+1 on the
+   receive side so six identical bits can still raise stuff_err.
+
+2. LATE BACK-PRESSURE (bit_stuff -> frame_gen). tx_stall was REGISTERED, so it
+   became valid one clock AFTER the slot it described. By then frame_gen had
+   already advanced, dropping exactly one payload bit per stuff bit. Added a
+   combinational tx_stall_c computed from settled state and drove frame_gen hold
+   from that instead.
+
+   This is the classic integration failure: both modules individually correct,
+   the fault entirely in the handshake between them.
+
+### THE COST - a self-inflicted testbench spiral
+I wrote a bit destuffer inside the testbench to recover the payload from the bus
+stream. It was wrong four separate ways and consumed most of the day. The right
+move, taken far too late, was to have frame_ref.py emit the expected STUFFED bus
+stream and compare against it directly. That worked immediately.
+
+RULE: when a reference model exists, never reimplement its inverse in the
+testbench. Compare against what the model already produces.
+
+Also of note: after five consecutive days where the RTL was correct and my
+testbench was not, I had stopped seriously considering that the DUT might be
+wrong. Today it was wrong twice. The fix was to compare the captured stream
+against the PAYLOAD directly, which located the dropped bit in one run.
+
+### OTHER ISSUES
+- VHDL-93 port maps require static names, not expressions. A gated enable needs
+  its own signal.
+- A spurious PASS: the compare loop only checked positions 1..nbits, so an extra
+  48th bit went unexamined. Fixed by checking the full bus length.
+- The capture window overruns the frame by one idle slot, so the length check
+  now requires the captured stream to CONTAIN the expected one from SOF, with
+  trailing recessive slots allowed - which is what a real receiver sees.

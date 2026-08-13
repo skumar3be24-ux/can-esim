@@ -59,8 +59,12 @@ entity bit_stuff is
     tx_bit_in  : in  std_logic;  -- next payload bit
     tx_stuff_en: in  std_logic;  -- stuffing active for this field
     tx_bit_out : out std_logic;  -- bit to drive on the bus
-    tx_stall   : out std_logic;  -- '1' = a stuff bit is being sent,
-                                 --       payload bit NOT consumed
+    tx_stall   : out std_logic;  -- registered: valid AFTER the slot
+    tx_stall_c : out std_logic;  -- COMBINATIONAL: valid DURING the
+                                 -- slot, for upstream back-pressure.
+                                 -- frame_gen must use this one - the
+                                 -- registered version arrives a clock
+                                 -- late and a payload bit is dropped.
 
     -- ---------------- receive side -----------------
     rx_en      : in  std_logic;  -- one pulse per sampled bit
@@ -130,8 +134,19 @@ begin
           tx_out_r   <= tx_bit_in;
           tx_started <= '1';
 
-          if tx_started = '1' and tx_bit_in = tx_last then
-            tx_same_cnt <= tx_same_cnt + 1;
+          -- Day 27 (integration): when stuffing is DISABLED the run
+          -- counter must not accumulate. The fixed-form fields at the
+          -- end of a frame are 13 consecutive recessive bits (CRC
+          -- delimiter, ACK, ACK delimiter, 7 EOF, 3 IFS) with no stuff
+          -- bit to reset the count, which overflowed the 1..8 range.
+          -- Isolated tests never saw this because they only exercised
+          -- enabled runs.
+          if tx_stuff_en = '0' then
+            tx_same_cnt <= 1;
+          elsif tx_started = '1' and tx_bit_in = tx_last then
+            if tx_same_cnt < STUFF_LEN then
+              tx_same_cnt <= tx_same_cnt + 1;
+            end if;
           else
             tx_same_cnt <= 1;
           end if;
@@ -144,6 +159,11 @@ begin
 
   tx_bit_out <= tx_out_r;
   tx_stall   <= tx_stall_r;
+
+  -- same condition the tx process uses, available immediately
+  tx_stall_c <= '1' when (tx_stuff_en = '1' and tx_started = '1'
+                          and tx_same_cnt >= STUFF_LEN)
+                else '0';
 
   -- ============================================================
   -- RECEIVE: discard a stuff bit after STUFF_LEN identical bits,
@@ -192,8 +212,13 @@ begin
           rx_valid_r <= '1';
           rx_started <= '1';
 
-          if rx_started = '1' and rx_bit_in = rx_last then
-            rx_same_cnt <= rx_same_cnt + 1;
+          -- same clamp as the transmit side
+          if rx_stuff_en = '0' then
+            rx_same_cnt <= 1;
+          elsif rx_started = '1' and rx_bit_in = rx_last then
+            if rx_same_cnt < STUFF_LEN + 1 then
+              rx_same_cnt <= rx_same_cnt + 1;
+            end if;
           else
             rx_same_cnt <= 1;
           end if;

@@ -103,6 +103,40 @@ def build_frame(can_id, rtr, dlc, data_bytes):
     return bits, stuff
 
 
+def stuff_stream(bits, stuff_flags):
+    """
+    Apply bit stuffing to a payload, returning the bus stream.
+
+    Insert a bit of opposite polarity AFTER five consecutive
+    identical bits, while stuffing is active for that field. The
+    stuffed bit itself begins the next run, so twelve identical
+    bits yield TWO stuff bits.
+
+    Day 27 note: an earlier version of this function tracked the
+    run with an index that was one behind the bit being appended,
+    placing every stuff bit one position early. The VHDL was
+    correct and this model was not. Verified against the captured
+    DUT stream: for ID 0x0A5 DLC 0 the run of five completes at
+    payload index 16 and the stuff bit sits at bus position 17.
+    """
+    out = []
+    run_val = None
+    run_len = 0
+    for idx, b in enumerate(bits):
+        out.append(b)
+        if b == run_val:
+            run_len += 1
+        else:
+            run_val = b
+            run_len = 1
+        if run_len == 5 and stuff_flags[idx] == 1:
+            s = 1 - b
+            out.append(s)
+            run_val = s
+            run_len = 1
+    return out
+
+
 def main():
     random.seed(20260813)
     frames = []
@@ -140,10 +174,13 @@ def main():
             datahex = ''.join('%02X' % b for b in data)
             if datahex == '':
                 datahex = '-'
-            f.write('%03X %d %d %s %d %s %s\n' % (
+            busbits = stuff_stream(bits, stuff)
+            f.write('%03X %d %d %s %d %s %s %d %s\n' % (
                 can_id, rtr, dlc, datahex, len(bits),
                 ''.join(str(b) for b in bits),
-                ''.join(str(s) for s in stuff)))
+                ''.join(str(s) for s in stuff),
+                len(busbits),
+                ''.join(str(b) for b in busbits)))
 
     print('wrote frame_vectors.txt: %d frames' % len(frames))
     print()

@@ -71,6 +71,9 @@ entity frame_gen is
 
     -- ---- bit-rate interface ----
     bit_en      : in  std_logic;   -- one pulse per bit slot
+    hold        : in  std_logic;   -- '1' = downstream stuffer sent a
+                                   -- stuff bit this slot; do NOT
+                                   -- advance, re-offer the same bit
     tx_bit      : out std_logic;   -- the bit to transmit
     stuff_en    : out std_logic;   -- downstream stuffing active
     frame_active: out std_logic;   -- high for the whole frame
@@ -178,8 +181,12 @@ begin
           act_r  <= '1';
         end if;
 
-      elsif bit_en = '1' then
+      elsif bit_en = '1' and hold = '0' then
         -- ============ one bit slot ============
+        -- hold = '1' means the stuffer consumed this slot for a
+        -- stuff bit and did NOT take our payload bit. Freeze: the
+        -- same bit is re-offered next slot. Without this, one
+        -- payload bit is lost per stuff bit.
         case state is
 
           when ST_SOF =>

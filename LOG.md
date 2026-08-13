@@ -190,3 +190,20 @@
   already consumed the separator, so an extra read swallowed a digit of nbits
   (55 -> 5). All three predicted RTL failure points were correct first run
 - Gitignored generated vectors and VCDs; untracked crc_vectors.txt
+
+## Day 27 - transmit datapath integration
+- can_tx_path.vhdl wires bit_timing + frame_gen + crc15 + bit_stuff
+- 6 of 6 frames bit-exact on the bus, verified against the stuffed reference
+- Frame 6 (all-zero DLC 8) needed 16 stuff bits, all correctly placed
+- Measured 1.040 ms for 127 bits = real 125 kbit/s
+- RTL BUG 1: bit_stuff run counter overflowed on the 13 recessive fixed-form
+  bits at frame end, where stuffing is disabled and nothing reset it
+- RTL BUG 2: tx_stall was registered so it arrived a clock late; frame_gen had
+  already advanced and dropped one payload bit per stuff bit. Added a
+  combinational tx_stall_c for the back-pressure path
+- Both bugs were invisible to isolated testing - this is what integration is for
+- COST: I wrote a destuffer in the testbench, got it wrong four ways, and burned
+  most of the day. The reference model should have emitted the expected stuffed
+  stream from the start. RULE: never reimplement a reference model inverse
+- After five days of "it is always the testbench" I had stopped considering the
+  DUT could be wrong. Today it was, twice
