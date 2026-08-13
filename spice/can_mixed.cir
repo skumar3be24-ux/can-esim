@@ -1,0 +1,208 @@
+CAN mixed-signal - two NGHDL controllers on the analog PHY (Day 32)
+* ============================================================
+* THE POINT OF THE WHOLE PROJECT.
+*
+* Two can_node_top VHDL controllers, running as NGHDL models,
+* driving the analog CAN physical layer characterised in Days
+* 13-21, with the differential comparator feeding their receive
+* inputs.
+*
+*   [VHDL node 0] --can_tx--> dac --> driver --+
+*                                              |  CANH/CANL
+*   [VHDL node 1] --can_tx--> dac --> driver --+  (wired-AND,
+*                                              |   120 ohm term)
+*                  comparator <------- diff ---+
+*                       |
+*                       +--> adc --> can_rx of BOTH nodes
+*
+* WHAT THIS TESTS THAT PURE VHDL COULD NOT
+*   The wired-AND is now PHYSICAL - two driver stages sharing a
+*   terminated differential pair, not an AND gate. Arbitration
+*   and ACK depend on a node reading back an analog level that
+*   another node pulled dominant. If the analog thresholds,
+*   the driver on-resistance, or the comparator centring are
+*   wrong, the protocol breaks here and not before.
+*
+* FROZEN PARAMETERS (docs/phy_spec.md)
+*   bit rate      125 kbit/s      bit time 8.000 us
+*   clock         2.000 MHz       16 tq per bit, tq = 500 ns
+*   R_on          45 ohm          dominant Vdiff 2.0 V
+*   termination   120 ohm x2      recessive both rails 2.5 V
+*   comparator    centred 0.7 V, gain 10
+*
+* NODE IDENTITIES
+*   id_sel = 00 -> ID 0x0A5   (node 0, lower ID, must WIN)
+*   id_sel = 01 -> ID 0x123   (node 1, higher ID, must LOSE)
+* ============================================================
+
+.param VCC_V = 5.0
+.param RON   = 45
+
+Vcc  vcc  0 DC {VCC_V}
+Vref vref 0 DC 2.5
+
+* ============ 2.000 MHz clock, one time quantum ============
+* 500 ns period, 50% duty
+Vclk clk_a 0 PULSE(0 5 0 5n 5n 245n 500n)
+Rclk clk_a 0 1meg
+
+* ============ reset, released after 2 us ============
+Vrst rst_a 0 PWL(0 0  1.9u 0  2.0u 5)
+Rrst rst_a 0 1meg
+
+* ============ transmit requests ============
+* Both nodes are asked to transmit at the same instant, so they
+* contend and arbitration decides. One clock wide (500 ns).
+Vreq0 req0_a 0 PWL(0 0  10.0u 0  10.1u 5  10.6u 5  10.7u 0)
+Rreq0 req0_a 0 1meg
+Vreq1 req1_a 0 PWL(0 0  10.0u 0  10.1u 5  10.6u 5  10.7u 0)
+Rreq1 req1_a 0 1meg
+
+* ============ id_sel constants ============
+* node 0 -> "00", node 1 -> "01"
+Vs0h sel0_hi 0 DC 0
+Vs0l sel0_lo 0 DC 0
+Vs1h sel1_hi 0 DC 0
+Vs1l sel1_lo 0 DC 5
+Rs0h sel0_hi 0 1meg
+Rs0l sel0_lo 0 1meg
+Rs1h sel1_hi 0 1meg
+Rs1l sel1_lo 0 1meg
+
+* ============ analog -> digital bridges ============
+.model adcmod adc_bridge(in_low=1.5 in_high=3.5)
+.model dacmod dac_bridge(out_low=0 out_high=5 out_undef=2.5
++                        t_rise=20n t_fall=20n)
+
+Aclk  [clk_a]  [clk_d]  adcmod
+Arst  [rst_a]  [rst_d]  adcmod
+Areq0 [req0_a] [req0_d] adcmod
+Areq1 [req1_a] [req1_d] adcmod
+As0h  [sel0_hi] [sel0_hi_d] adcmod
+As0l  [sel0_lo] [sel0_lo_d] adcmod
+As1h  [sel1_hi] [sel1_hi_d] adcmod
+As1l  [sel1_lo] [sel1_lo_d] adcmod
+
+* the received bus level, shared by both nodes
+Arx [rx_ana] [rx_d] adcmod
+
+* ============ the two VHDL controllers ============
+* port order from connection_info.txt:
+*   clk reset_n can_rx tx_req id_sel(2) | can_tx tx_busy tx_done
+*   arb_lost rx_valid
+a0 [clk_d] [rst_d] [rx_d] [req0_d] [sel0_hi_d sel0_lo_d]
++  [tx0_d] [busy0_d] [done0_d] [arb0_d] [rxv0_d] node0
+.model node0 can_node_top(rise_delay=1.0e-9 fall_delay=1.0e-9
++                         input_load=1.0e-12 instance_id=1)
+
+a1 [clk_d] [rst_d] [rx_d] [req1_d] [sel1_hi_d sel1_lo_d]
++  [tx1_d] [busy1_d] [done1_d] [arb1_d] [rxv1_d] node1
+.model node1 can_node_top(rise_delay=1.0e-9 fall_delay=1.0e-9
++                         input_load=1.0e-12 instance_id=2)
+
+* ============ digital -> analog: measurement taps ============
+* Digital event nodes cannot be read by "meas tran v(...)" - they
+* are not analog vectors. Convert every signal of interest back to
+* analog so it can be measured.
+Amb0 [busy0_d] [busy0_a] dacmod
+Amb1 [busy1_d] [busy1_a] dacmod
+Ama0 [arb0_d]  [arb0_a]  dacmod
+Ama1 [arb1_d]  [arb1_a]  dacmod
+Amd0 [done0_d] [done0_a] dacmod
+Amr1 [rxv1_d]  [rxv1_a]  dacmod
+Amck [clk_d]   [clk_chk] dacmod
+Amrq [req0_d]  [req0_chk] dacmod
+Amrs [rst_d]   [rst_chk] dacmod
+Rmb0 busy0_a 0 1meg
+Rmb1 busy1_a 0 1meg
+Rma0 arb0_a 0 1meg
+Rma1 arb1_a 0 1meg
+Rmd0 done0_a 0 1meg
+Rmr1 rxv1_a 0 1meg
+Rmck clk_chk 0 1meg
+Rmrq req0_chk 0 1meg
+Rmrs rst_chk 0 1meg
+
+* ============ digital -> analog: the bus drivers ============
+Adac0 [tx0_d] [tx0_a] dacmod
+Adac1 [tx1_d] [tx1_a] dacmod
+
+* dominant is logic 0, and the switch model closes on a HIGH
+* control voltage, so invert
+Bdrv0 ctrl0 0 V = 5 - V(tx0_a)
+Bdrv1 ctrl1 0 V = 5 - V(tx1_a)
+
+.model swmod SW(Vt=2.5 Vh=0.2 Ron={RON} Roff=1e9)
+
+* node 0 driver stage
+Sh0 vcc  canh ctrl0 0 swmod
+Sl0 canl 0    ctrl0 0 swmod
+
+* node 1 driver stage - SAME differential pair, so the wired-AND
+* is physical: either driver alone pulls the bus dominant
+Sh1 vcc  canh ctrl1 0 swmod
+Sl1 canl 0    ctrl1 0 swmod
+
+* ============ the bus itself ============
+Rterm_a canh canl 120
+Rterm_b canh canl 120
+Rbias1  canh vref 10k
+Rbias2  canl vref 10k
+Cbush   canh 0 500p
+Cbusl   canl 0 500p
+Rleak1  canh 0 100meg
+Rleak2  canl 0 100meg
+
+* ============ differential receiver ============
+Bcomp rx_ana 0 V = 2.5*(1 - tanh(10*(V(canh)-V(canl)-0.7)))
+Rcomp rx_ana 0 1meg
+
+* ============ analysis ============
+* One frame is about 50 bits at 8 us = 400 us. Run to 600 us so
+* the frame completes with margin.
+.tran 100n 600u
+
+.control
+  run
+
+  echo ""
+  echo "================ MIXED-SIGNAL CAN ================"
+  echo ""
+  echo "--- inputs actually reaching the models ---"
+  meas tran clk_hi  MAX v(clk_chk)  FROM=5u TO=25u
+  meas tran clk_lo  MIN v(clk_chk)  FROM=5u TO=25u
+  meas tran rst_hi  MAX v(rst_chk)  FROM=5u TO=25u
+  meas tran req_hi  MAX v(req0_chk) FROM=9u TO=12u
+  echo ""
+  echo "--- bus levels ---"
+  meas tran vdiff_dom  MIN  v(canh)-v(canl) FROM=20u TO=500u
+  meas tran vdiff_rec  MAX  v(canh)-v(canl) FROM=20u TO=500u
+  echo ""
+  echo "--- did the nodes transmit? ---"
+  meas tran busy0_hi MAX v(busy0_a) FROM=10u TO=500u
+  meas tran busy1_hi MAX v(busy1_a) FROM=10u TO=500u
+  echo ""
+  echo "--- ARBITRATION: node 1 must lose, node 0 must not ---"
+  meas tran arb0_max MAX v(arb0_a) FROM=10u TO=500u
+  meas tran arb1_max MAX v(arb1_a) FROM=10u TO=500u
+  echo ""
+  echo "--- ACK and RECEPTION ---"
+  meas tran done0_max MAX v(done0_a) FROM=10u TO=600u
+  meas tran rxv1_max  MAX v(rxv1_a)  FROM=10u TO=600u
+  echo ""
+  echo "================ EXPECTED ================"
+  echo "  vdiff_dom  about -2.0 V   (canh-canl inverted sign: the"
+  echo "             measurement is MIN so dominant shows as the"
+  echo "             largest magnitude)"
+  echo "  vdiff_rec  about  0 V"
+  echo "  busy0/1    5 V - both nodes started transmitting"
+  echo "  arb0_max   0 V - node 0 has the LOWER id and must WIN"
+  echo "  arb1_max   5 V - node 1 must detect the loss"
+  echo "  done0_max  5 V - node 0 frame acknowledged by node 1"
+  echo "  rxv1_max   5 V - node 1 received node 0 frame"
+  echo ""
+
+  write can_mixed.raw
+.endc
+
+.end
