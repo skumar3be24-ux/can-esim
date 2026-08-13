@@ -30,7 +30,13 @@ entity can_node is
     rx_data   : out std_logic_vector(63 downto 0);
     rx_crcerr : out std_logic;
     rx_formerr: out std_logic;
-    rx_stuferr: out std_logic
+    rx_stuferr: out std_logic;
+    tec_out    : out std_logic_vector(8 downto 0);
+    rec_out    : out std_logic_vector(8 downto 0);
+    err_active : out std_logic;
+    err_passive: out std_logic;
+    bus_off    : out std_logic;
+    err_frame  : out std_logic
   );
 end can_node;
 architecture rtl of can_node is
@@ -55,6 +61,24 @@ architecture rtl of can_node is
   signal ack_drive_raw : std_logic;
   signal ack_drive_eff : std_logic;
   signal rx_done_s : std_logic;
+  signal rx_crc_s   : std_logic;
+  signal rx_form_s  : std_logic;
+  signal any_rx_err : std_logic;
+  signal err_req_s  : std_logic;
+  signal eg_active : std_logic;
+  signal eg_bit    : std_logic;
+  signal eg_done   : std_logic;
+  signal eg_stuck  : std_logic;
+  signal em_active  : std_logic;
+  signal em_passive : std_logic;
+  signal em_busoff  : std_logic;
+  signal bus_sampled : std_logic := '1';
+  signal rec_run  : integer range 0 to 15 := 0;
+  signal idle11_s : std_logic := '0';
+  signal node_tx    : std_logic;
+  signal bit_err_s  : std_logic;
+  signal in_ack_s   : std_logic;
+  signal tx_err_any : std_logic;
 begin
   u_tx : entity work.can_tx_path
     generic map (
@@ -76,6 +100,8 @@ begin
       bit_slot => bit_slot,
       sample_now => sample_now,
       stuff_now => stuff_now,
+      bit_err     => bit_err_s,
+      in_ack_slot => in_ack_s,
       arb_lost => arb_lost_s,
       ack_ok => ack_ok_s,
       ack_err => ack_err_s
@@ -111,8 +137,8 @@ begin
       ack_drive => ack_drive_raw,
       rx_active => open,
       rx_done   => rx_done_s,
-      crc_err   => rx_crcerr,
-      form_err  => rx_formerr,
+      crc_err   => rx_crc_s,
+      form_err  => rx_form_s,
       field_id  => open
     );
   u_rxcrc : entity work.crc15
@@ -121,12 +147,76 @@ begin
       crc_clr => rcrc_clr, crc_en => rcrc_en,
       crc_in => rcrc_bit, crc_out => rcrc_val
     );
+  in_ack_s <= '1' when (tx_field = x"9" or tx_field = x"A"
+                        or tx_field = x"B") else '0';
+  any_rx_err <= (rx_crc_s or rx_form_s or rxs_stuff_err)
+                and (not eg_active);
+  tx_err_any <= (bit_err_s or ack_err_s) and (not eg_active);
+  err_req_s  <= any_rx_err or tx_err_any;
+  process(clk, reset_n)
+  begin
+    if reset_n = '0' then
+      bus_sampled <= '1';
+      rec_run     <= 0;
+      idle11_s    <= '0';
+    elsif rising_edge(clk) then
+      idle11_s <= '0';
+      if sample_now = '1' then
+        bus_sampled <= can_rx;
+        if can_rx = '1' then
+          if rec_run >= 10 then
+            idle11_s <= '1';
+            rec_run  <= 0;
+          else
+            rec_run <= rec_run + 1;
+          end if;
+        else
+          rec_run <= 0;
+        end if;
+      end if;
+    end if;
+  end process;
+  u_errgen : entity work.error_gen
+    port map (
+      clk => clk, reset_n => reset_n,
+      bit_en     => bit_slot,
+      bus_bit    => bus_sampled,
+      err_req    => err_req_s,
+      is_passive => em_passive,
+      err_active => eg_active,
+      err_bit    => eg_bit,
+      err_done   => eg_done,
+      stuck_bus  => eg_stuck
+    );
+  u_errmgmt : entity work.error_mgmt
+    port map (
+      clk => clk, reset_n => reset_n,
+      tx_error   => tx_err_any,
+      rx_error   => any_rx_err,
+      rx_err_big => '0',
+      tx_success => ack_ok_s,
+      rx_success => rx_done_s,
+      idle_11    => idle11_s,
+      tec => tec_out, rec => rec_out,
+      err_active => em_active,
+      err_passive => em_passive,
+      bus_off => em_busoff
+    );
   ack_drive_eff <= ack_drive_raw and (not tx_active);
-  can_tx <= tx_bit_out and (not ack_drive_eff);
+  node_tx <= tx_bit_out and (not ack_drive_eff);
+  can_tx <= '1'     when em_busoff = '1' else
+            eg_bit  when eg_active = '1' else
+            node_tx;
   tx_busy    <= tx_active;
   tx_done    <= ack_ok_s;
   tx_arblost <= arb_lost_s;
   tx_noack   <= ack_err_s;
   rx_valid   <= rx_done_s;
   rx_stuferr <= rxs_stuff_err;
+  rx_crcerr  <= rx_crc_s;
+  rx_formerr <= rx_form_s;
+  err_active  <= em_active;
+  err_passive <= em_passive;
+  bus_off     <= em_busoff;
+  err_frame   <= eg_active;
 end rtl;

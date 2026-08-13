@@ -91,12 +91,14 @@ Arx [rx_ana] [rx_d] adcmod
 *   clk reset_n can_rx tx_req id_sel(2) | can_tx tx_busy tx_done
 *   arb_lost rx_valid
 a0 [clk_d] [rst_d] [rx_d] [req0_d] [sel0_hi_d sel0_lo_d]
-+  [tx0_d] [busy0_d] [done0_d] [arb0_d] [rxv0_d] node0
++  [tx0_d] [busy0_d] [done0_d] [arb0_d] [rxv0_d]
++  [errf0_d] [boff0_d] node0
 .model node0 can_node_top(rise_delay=1.0e-9 fall_delay=1.0e-9
 +                         input_load=1.0e-12 instance_id=1)
 
 a1 [clk_d] [rst_d] [rx_d] [req1_d] [sel1_hi_d sel1_lo_d]
-+  [tx1_d] [busy1_d] [done1_d] [arb1_d] [rxv1_d] node1
++  [tx1_d] [busy1_d] [done1_d] [arb1_d] [rxv1_d]
++  [errf1_d] [boff1_d] node1
 .model node1 can_node_top(rise_delay=1.0e-9 fall_delay=1.0e-9
 +                         input_load=1.0e-12 instance_id=2)
 
@@ -110,6 +112,10 @@ Ama0 [arb0_d]  [arb0_a]  dacmod
 Ama1 [arb1_d]  [arb1_a]  dacmod
 Amd0 [done0_d] [done0_a] dacmod
 Amr1 [rxv1_d]  [rxv1_a]  dacmod
+Amef0 [errf0_d] [errf0_a] dacmod
+Amef1 [errf1_d] [errf1_a] dacmod
+Ambo0 [boff0_d] [boff0_a] dacmod
+Ambo1 [boff1_d] [boff1_a] dacmod
 Amck [clk_d]   [clk_chk] dacmod
 Amrq [req0_d]  [req0_chk] dacmod
 Amrs [rst_d]   [rst_chk] dacmod
@@ -119,6 +125,10 @@ Rma0 arb0_a 0 1meg
 Rma1 arb1_a 0 1meg
 Rmd0 done0_a 0 1meg
 Rmr1 rxv1_a 0 1meg
+Rmef0 errf0_a 0 1meg
+Rmef1 errf1_a 0 1meg
+Rmbo0 boff0_a 0 1meg
+Rmbo1 boff1_a 0 1meg
 Rmck clk_chk 0 1meg
 Rmrq req0_chk 0 1meg
 Rmrs rst_chk 0 1meg
@@ -185,6 +195,12 @@ Rcomp rx_ana 0 1meg
   echo "--- ARBITRATION: node 1 must lose, node 0 must not ---"
   meas tran arb0_max MAX v(arb0_a) FROM=10u TO=500u
   meas tran arb1_max MAX v(arb1_a) FROM=10u TO=500u
+  echo ""
+  echo "--- ERROR FRAMES and BUS-OFF (should be 0 on clean traffic) ---"
+  meas tran errf0 MAX v(errf0_a) FROM=10u TO=600u
+  meas tran errf1 MAX v(errf1_a) FROM=10u TO=600u
+  meas tran boff0 MAX v(boff0_a) FROM=10u TO=600u
+  meas tran boff1 MAX v(boff1_a) FROM=10u TO=600u
   echo ""
   echo "--- ACK and RECEPTION ---"
   meas tran done0_max MAX v(done0_a) FROM=10u TO=600u

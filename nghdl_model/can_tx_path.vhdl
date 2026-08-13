@@ -24,6 +24,8 @@ entity can_tx_path is
     bit_slot    : out std_logic;
     sample_now  : out std_logic;
     stuff_now   : out std_logic;
+    bit_err     : out std_logic;
+    in_ack_slot : in  std_logic;
     arb_lost    : out std_logic;
     ack_ok      : out std_logic;
     ack_err     : out std_logic
@@ -41,6 +43,7 @@ architecture rtl of can_tx_path is
   signal fg_active   : std_logic;
   signal fg_arblost  : std_logic;
   signal fg_in_arb   : std_logic;
+  signal biterr_s    : std_logic;
   signal arb_abort_s : std_logic;
   signal driven_bit  : std_logic;
   signal fg_ack_ok   : std_logic;
@@ -61,6 +64,11 @@ architecture rtl of can_tx_path is
 begin
   tx_slot_en <= bit_start and fg_active;
   driven_bit  <= st_bit_out when fg_active = '1' else '1';
+  biterr_s <= '1' when (sample_pt = '1' and fg_active = '1'
+                        and fg_in_arb = '0'
+                        and in_ack_slot = '0'
+                        and driven_bit /= can_rx)
+              else '0';
   arb_abort_s <= '1' when (sample_pt = '1' and fg_active = '1'
                            and fg_in_arb = '1'
                            and driven_bit = '1' and can_rx = '0')
@@ -135,6 +143,7 @@ begin
   bit_slot     <= bit_start;
   sample_now   <= sample_pt;
   stuff_now    <= st_stall;
+  bit_err      <= biterr_s;
   arb_lost     <= fg_arblost;
   ack_ok       <= fg_ack_ok;
   ack_err      <= fg_ack_err;

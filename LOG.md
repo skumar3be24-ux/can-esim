@@ -371,3 +371,16 @@
 - LIMITATION: that is deliberately conservative - a genuine bit error in the CRC
   or ACK delimiter is now missed. Chose working traffic over an elegant fix
 - STILL OPEN: rx_err_big tied to 0; needs monitoring during our own error frame
+
+## Day 37 - full system in mixed-signal
+- Rebuilt the NGHDL model with all Phase 5 logic (10 VHDL files now)
+- Wrapper exposes err_frame and bus_off; can_node_top is 12 ports
+- Clean two-node traffic on the analog PHY: arbitration correct, ACK received,
+  frame received, and ZERO error frames or bus-off events
+- The zeros matter most: bit monitoring compares driven bits against a real
+  differential pair through comparator, bridges and bus capacitance, and finds
+  no false faults. Stronger than the pure-VHDL test where the bus was an AND gate
+- Complete CAN protocol now running as a mixed-signal simulation: timing, resync,
+  stuffing, CRC, framing, arbitration, ACK, error frames, fault confinement
+- Reminder: DUTghdl holds COPIES, so the model must be regenerated after any
+  VHDL change

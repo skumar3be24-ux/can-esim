@@ -41,7 +41,9 @@ port(clk : in std_logic;
      tx_busy : out std_logic;
      tx_done : out std_logic;
      arb_lost : out std_logic;
-     rx_valid : out std_logic);
+     rx_valid : out std_logic;
+     err_frame : out std_logic;
+     bus_off : out std_logic);
 end can_node_top;
 
 architecture rtl of can_node_top is
@@ -54,6 +56,8 @@ architecture rtl of can_node_top is
   signal n_tx_arblost : std_logic;
   signal n_tx_noack   : std_logic;
   signal n_rx_valid   : std_logic;
+  signal n_err_frame  : std_logic;
+  signal n_bus_off    : std_logic;
 
 begin
 
@@ -99,12 +103,20 @@ begin
       rx_data => open,
       rx_crcerr => open,
       rx_formerr => open,
-      rx_stuferr => open
+      rx_stuferr => open,
+      tec_out => open,
+      rec_out => open,
+      err_active => open,
+      err_passive => open,
+      bus_off => n_bus_off,
+      err_frame => n_err_frame
     );
 
   tx_busy  <= n_tx_busy;
   tx_done  <= n_tx_done;
   arb_lost <= n_tx_arblost;
   rx_valid <= n_rx_valid;
+  err_frame <= n_err_frame;
+  bus_off <= n_bus_off;
 
 end rtl;

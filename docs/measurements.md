@@ -1250,3 +1250,45 @@ limitation rather than presented as complete.
 rx_err_big remains tied to Z0Z. The standard uses it when a receiver detects a
 bit error while sending its own ACTIVE error flag - that needs monitoring during
 the error frame, which the current suppression explicitly disables.
+
+## Day 37 - Full system in mixed-signal (error handling on the analog PHY)
+
+Rebuilt the NGHDL model with the complete Phase 5 logic - error detection, error
+frames, fault confinement and transmit-side bit monitoring - and reran the
+two-node mixed-signal netlist.
+
+Ten VHDL files now: the original eight plus error_gen and error_mgmt. The wrapper
+gained err_frame and bus_off outputs so fault confinement is observable from
+SPICE, taking can_node_top to 12 ports.
+
+### RESULT: clean traffic, zero false errors
+
+| Measurement | Value | Meaning |
+|---|---|---|
+| arb0_max / arb1_max | 0 / 5 V | node 0 won, node 1 detected the loss |
+| errf0 / errf1 | 0 / 0 | NO error frames on clean traffic |
+| boff0 / boff1 | 0 / 0 | neither node degraded |
+| done0_max | 5 V | frame acknowledged |
+| rxv1_max | 5 V | frame received |
+
+THE ZEROS ARE THE RESULT. Error handling now sits in every node bus-output path,
+with bit monitoring comparing each driven bit against a real differential pair at
+the sample point. It stays completely silent on healthy traffic: the analog path
+- comparator delay, driver on-resistance, ADC and DAC bridge conversion, bus
+capacitance - introduces nothing the protocol mistakes for a fault.
+
+That is a stronger statement than the pure-VHDL equivalent. In VHDL the bus was
+an AND gate with zero delay; here a node reads back its own bit through a switch,
+a terminated pair, a tanh comparator and two bridges, and the comparison still
+holds bit for bit.
+
+### THE PROTOCOL NOW RUNNING ON ANALOG SILICON MODELS
+  bit timing with resynchronisation, bit stuffing and destuffing, CRC-15,
+  frame assembly and decode, non-destructive arbitration, acknowledgement,
+  error detection on both sides, error frames with active and passive flags,
+  TEC/REC fault confinement and bus-off.
+
+### NOTE ON THE REBUILD
+The NGHDL model must be regenerated whenever the VHDL changes - DUTghdl holds
+copies, not references. The GUI Add Files dialog handles all nine dependencies,
+and the Day 32 multi-file patch analyses them in dependency order.
