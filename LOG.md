@@ -340,3 +340,18 @@
 - Bounded wait so a stuck-dominant bus is reported, not hung on
 - TO VERIFY: I latch is_passive at frame start so polarity cannot flip mid-frame.
   Not confirmed against ISO 11898-1 - check before the report
+
+## Day 35 - error handling integrated into can_node
+- error_mgmt + error_gen wired in; bus priority is bus-off > error frame > normal
+- Day 31 regression still 4/4: clean traffic completely unaffected
+- Clean frame produces no error frames and zero counters - no spurious firing
+- Corrupted frame is REJECTED (rx_valid stays low), error frame sent, REC=17
+- GAP 1: no transmit-side bit monitoring, so the TRANSMITTER counts REC not TEC.
+  Node 0 reached REC=68 with TEC=0. Real nodes compare each transmitted bit
+  against the bus and raise a bit error (+8). Day 36
+- GAP 2: 17 errors from one corrupted frame is too many - the node is probably
+  not suppressing detection during its own error frame
+- GAP 3: rx_err_big tied to 0, so the +8 receive path is dead code; it needs the
+  monitoring from gap 1
+- A single-bit corruption went undetected, likely because it hit an already
+  dominant bit. ASSUMED, not verified

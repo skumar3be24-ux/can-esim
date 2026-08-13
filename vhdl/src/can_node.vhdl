@@ -79,7 +79,15 @@ entity can_node is
     rx_data   : out std_logic_vector(63 downto 0);
     rx_crcerr : out std_logic;   -- pulse
     rx_formerr: out std_logic;   -- pulse
-    rx_stuferr: out std_logic    -- pulse
+    rx_stuferr: out std_logic;   -- pulse
+
+    -- ---------------- fault confinement ----------------
+    tec_out    : out std_logic_vector(8 downto 0);
+    rec_out    : out std_logic_vector(8 downto 0);
+    err_active : out std_logic;  -- error-active state
+    err_passive: out std_logic;  -- error-passive state
+    bus_off    : out std_logic;  -- disconnected
+    err_frame  : out std_logic   -- high while sending an error frame
   );
 end can_node;
 
@@ -112,6 +120,33 @@ architecture rtl of can_node is
   signal ack_drive_eff : std_logic;
 
   signal rx_done_s : std_logic;
+
+  -- error paths
+  signal rx_crc_s   : std_logic;
+  signal rx_form_s  : std_logic;
+  signal any_rx_err : std_logic;
+  signal err_req_s  : std_logic;
+
+  signal eg_active : std_logic;
+  signal eg_bit    : std_logic;
+  signal eg_done   : std_logic;
+  signal eg_stuck  : std_logic;
+
+  signal em_active  : std_logic;
+  signal em_passive : std_logic;
+  signal em_busoff  : std_logic;
+
+  -- bus level latched at the sample point. error_gen advances at
+  -- the START of a bit slot so its output is stable by the sample
+  -- point, but it must READ the bus as sampled - two different
+  -- instants, so the level has to be held.
+  signal bus_sampled : std_logic := '1';
+
+  -- 11 consecutive recessive bits, for bus-off recovery
+  signal rec_run  : integer range 0 to 15 := 0;
+  signal idle11_s : std_logic := '0';
+
+  signal node_tx : std_logic;
 
 begin
 
@@ -176,8 +211,8 @@ begin
       ack_drive => ack_drive_raw,
       rx_active => open,
       rx_done   => rx_done_s,
-      crc_err   => rx_crcerr,
-      form_err  => rx_formerr,
+      crc_err   => rx_crc_s,
+      form_err  => rx_form_s,
       field_id  => open
     );
 
@@ -188,6 +223,69 @@ begin
       crc_in => rcrc_bit, crc_out => rcrc_val
     );
 
+  -- ============ error event routing ============
+  -- Any receive-side error starts an error frame and bumps REC.
+  any_rx_err <= rx_crc_s or rx_form_s or rxs_stuff_err;
+  err_req_s  <= any_rx_err;
+
+  -- ============ bus level sampling and idle detection ============
+  process(clk, reset_n)
+  begin
+    if reset_n = '0' then
+      bus_sampled <= '1';
+      rec_run     <= 0;
+      idle11_s    <= '0';
+    elsif rising_edge(clk) then
+      idle11_s <= '0';
+      if sample_now = '1' then
+        bus_sampled <= can_rx;
+        -- count consecutive recessive bits for bus-off recovery
+        if can_rx = '1' then
+          if rec_run >= 10 then
+            idle11_s <= '1';     -- 11 recessive bits seen
+            rec_run  <= 0;
+          else
+            rec_run <= rec_run + 1;
+          end if;
+        else
+          rec_run <= 0;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  -- ============ error frame generator ============
+  u_errgen : entity work.error_gen
+    port map (
+      clk => clk, reset_n => reset_n,
+      bit_en     => bit_slot,       -- advance at the slot start
+      bus_bit    => bus_sampled,    -- read the level as sampled
+      err_req    => err_req_s,
+      is_passive => em_passive,
+      err_active => eg_active,
+      err_bit    => eg_bit,
+      err_done   => eg_done,
+      stuck_bus  => eg_stuck
+    );
+
+  -- ============ fault confinement counters ============
+  u_errmgmt : entity work.error_mgmt
+    port map (
+      clk => clk, reset_n => reset_n,
+      -- a transmitter that got no ACK caused the problem: +8
+      tx_error   => ack_err_s,
+      -- receive-side errors: +1
+      rx_error   => any_rx_err,
+      rx_err_big => '0',
+      tx_success => ack_ok_s,
+      rx_success => rx_done_s,
+      idle_11    => idle11_s,
+      tec => tec_out, rec => rec_out,
+      err_active => em_active,
+      err_passive => em_passive,
+      bus_off => em_busoff
+    );
+
   -- ============ ACK gating ============
   -- Do NOT acknowledge our own frame. A transmitter that ACKed
   -- itself would always see a dominant ACK slot and could never
@@ -195,9 +293,18 @@ begin
   ack_drive_eff <= ack_drive_raw and (not tx_active);
 
   -- ============ bus contribution ============
-  -- wired-AND: dominant wins. This node pulls the bus dominant
-  -- either by transmitting a dominant bit or by driving the ACK.
-  can_tx <= tx_bit_out and (not ack_drive_eff);
+  -- Priority:
+  --   BUS OFF      -> drive nothing, always recessive. The node is
+  --                   disconnected and must not disturb the bus.
+  --   ERROR FRAME  -> error_gen owns the output. Its flag has to
+  --                   reach the bus even mid-frame; that is the
+  --                   whole mechanism for destroying a bad frame.
+  --   NORMAL       -> transmit bit, wired-AND with the ACK drive.
+  node_tx <= tx_bit_out and (not ack_drive_eff);
+
+  can_tx <= '1'     when em_busoff = '1' else
+            eg_bit  when eg_active = '1' else
+            node_tx;
 
   -- ============ status ============
   tx_busy    <= tx_active;
@@ -207,5 +314,12 @@ begin
 
   rx_valid   <= rx_done_s;
   rx_stuferr <= rxs_stuff_err;
+  rx_crcerr  <= rx_crc_s;
+  rx_formerr <= rx_form_s;
+
+  err_active  <= em_active;
+  err_passive <= em_passive;
+  bus_off     <= em_busoff;
+  err_frame   <= eg_active;
 
 end rtl;

@@ -1137,3 +1137,58 @@ is_passive is LATCHED at the start of the error frame, so a node crossing the 12
 threshold mid-frame cannot flip its flag polarity halfway through. This seemed
 obviously right but I have NOT confirmed ISO 11898-1 requires it - it may be that
 the node should switch. To be checked before the report rather than assumed.
+
+## Day 35 - Error handling wired into can_node
+
+error_mgmt and error_gen are now inside the node, with the bus output arbitrated
+between normal transmission, error frames, and bus-off silence.
+
+### ROUTING DECISIONS
+  receive errors (crc, form, stuff) -> err_req to error_gen, rx_error (+1)
+  ack_err -> tx_error (+8): a transmitter that got no ACK caused the problem
+  tx_done -> tx_success (-1), rx_valid -> rx_success (-1)
+  11 recessive bits counted at the sample point -> bus-off recovery
+
+BUS PRIORITY: bus-off (silent) > error frame > normal transmit. An error frame
+must override transmission MID-FRAME - corrupting the frame in progress is the
+entire mechanism.
+
+TIMING: error_gen advances on bit_slot (slot start, so its output is stable by
+the sample point) but reads bus_sampled, latched at the sample point. Two
+different instants, so the level has to be held.
+
+### RESULTS
+
+| Test | Result |
+|---|---|
+| Day 31 regression, 4 tests | all still pass - clean traffic unaffected |
+| Clean frame | no error frames, TEC=0, REC=0 - no spurious firing |
+| Corrupted frame (6 bit times forced dominant) | frame REJECTED, error frame sent, REC=17 |
+| 4 corrupted frames | REC0=68, REC1=68 |
+
+The clean-frame test is the one that mattered most: the error logic now sits in
+every node bus-output path, and a detector that fires on good traffic would be
+worse than none.
+
+### THREE GAPS, STATED RATHER THAN HIDDEN
+
+1. NO TRANSMIT-SIDE BIT MONITORING. Node 0 is the transmitter, yet its REC
+   climbed to 68 while TEC stayed at 0 - its own receive chain sees the corrupted
+   bus and counts a receive error. A real node compares every transmitted bit
+   against the bus and raises a BIT ERROR (TEC +8) on mismatch outside
+   arbitration. This is why the +8 transmit path is barely exercised. Day 36.
+
+2. 17 ERRORS FROM ONE CORRUPTED FRAME. A real node raises roughly one error per
+   frame. Some cascade is realistic - error frames do trigger further stuff
+   errors - but this suggests the node is not suppressing its own detection while
+   transmitting an error frame.
+
+3. rx_err_big IS TIED TO Z0Z. The +8 receive path from Day 33 is dead code in the
+   integrated node. The standard uses it when a receiver detects a bit error
+   while sending its own active error flag, which needs the monitoring from gap 1.
+
+### ALSO NOTED
+A single-bit corruption went UNDETECTED in the first attempt. Most likely it
+landed on a bit that was already dominant, so nothing changed on the wire -
+but this is assumed, not verified. Worth checking, because a genuine single-bit
+escape would be a CRC coverage problem.
