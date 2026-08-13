@@ -458,3 +458,12 @@
   ngspice syntax, and .sub is an expected submission file anyway
 - Subcircuit verified standalone before any GUI work: receiver output measured
   5.0 V recessive, 0.0 V dominant, 5.0 V recessive again
+
+## Day 42 (cont) - PROPOSAL SUBMITTED
+- FOSSEE Circuit Simulation Project proposal submitted and acknowledged by email
+- Title: CAN (Controller Area Network) Bus - Mixed-Signal Modelling and
+  Verification of a Multi-Node Communication Protocol in eSim
+- Approval expected within 7 working days
+- Description trimmed to 693 chars for the 500-700 limit; full detail is in the
+  attached PDF (docs/CANBusProposal.pdf)
+- Reference field wants LINKS, so used the public Bosch CAN 2.0 spec URL
