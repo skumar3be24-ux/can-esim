@@ -1383,3 +1383,48 @@ bus - can_tx is gated on bus_off - but its transmit FSM keeps cycling, so tx_bus
 stays asserted. Harmless electrically, wrong logically: a bus-off node should
 abandon transmission entirely rather than keep running a frame it cannot send.
 The fix is to gate frame_start and abort the current frame on bus_off.
+
+## Day 40 - Bus-off suppression fixed
+
+Day 39 found a node still cycling its transmit FSM after going bus-off. It was
+electrically silent - can_tx gated to recessive - but logically still trying to
+send a frame it could never transmit.
+
+### THE FIX - two parts
+  1. tx_req_gated <= tx_req and (not em_busoff)
+     A bus-off node cannot START a frame.
+  2. abort_in on can_tx_path, driven by a ONE-CYCLE PULSE on entering bus-off,
+     folded into the existing arbitration-abort path. Both mean the same thing:
+     stop transmitting this frame and release the bus.
+
+The pulse matters. Holding abort_in high would re-trigger the abort branch every
+clock, and since that branch resets state the node would be stuck unable to do
+anything - including counting the 11-recessive-bit sequences it needs for bus-off
+recovery.
+
+### RESULT
+
+| Measurement | Day 39 | Day 40 |
+|---|---|---|
+| bus-off entry | 5.626 ms | 5.626 ms (unchanged) |
+| tx_busy after bus-off | 5 V | 0 V |
+| healthy node bus_off | 0 V | 0 V |
+| clean-traffic regression | 4/4 | 4/4 |
+| error-injection regression | TEC0=28 | TEC0=28 |
+
+Bus-off entry timing is unchanged, so the abort does not interfere with error
+accumulation. Both regressions are bit-identical to before the change.
+
+### A MEASUREMENT THAT PROVED NOTHING
+The first check reported busy_late = 5 V and looked like the fix had failed. But
+the window ran 5.0 to 6.0 ms while bus-off happens at 5.626 ms, so it included
+the period when the node was LEGITIMATELY transmitting - MAX returns 5 V whether
+the fix works or not. Re-measuring from 5.7 ms gave 0 V.
+
+The clue was the timestamp: the peak had moved from 5.932 ms (Day 39) to
+5.6265 ms, which is 0.5 us after bus-off - one clock of abort latency, not
+continued transmission.
+
+RULE, and the second instance this week after the Day 38 vdiff failure: a
+measurement that returns the same value for the fixed and the broken case proves
+nothing. Check that the window can actually distinguish them.

@@ -412,3 +412,16 @@
 - HEADLINE: node B unaffected in every run. Fault confinement, not propagation
 - DEFECT: tx_busy stays high after bus-off. The node stops driving but its TX FSM
   keeps cycling. Should abort the frame and gate frame_start on bus_off
+
+## Day 40 - bus-off suppression fixed
+- A bus-off node now stops transmitting entirely: tx_req is gated and any frame
+  in progress is aborted via a one-cycle pulse into can_tx_path abort_in
+- The pulse (not level) matters - holding it would re-trigger the abort branch
+  forever and block bus-off recovery counting
+- Mixed-signal confirms: tx_busy after bus-off went 5 V -> 0 V, entry timing
+  unchanged at 5.626 ms, healthy node still unaffected
+- Both regressions bit-identical: 4/4 clean traffic, TEC0=28 on error injection
+- MEASUREMENT LESSON: my first check windowed 5.0-6.0 ms but bus-off is at
+  5.626 ms, so it included legitimate transmission and returned 5 V regardless of
+  the fix. A measurement that gives the same answer for fixed and broken proves
+  nothing. Second instance this week after the Day 38 vdiff expression bug

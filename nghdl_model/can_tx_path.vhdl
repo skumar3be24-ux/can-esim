@@ -26,6 +26,7 @@ entity can_tx_path is
     stuff_now   : out std_logic;
     bit_err     : out std_logic;
     in_ack_slot : in  std_logic;
+    abort_in    : in  std_logic;
     arb_lost    : out std_logic;
     ack_ok      : out std_logic;
     ack_err     : out std_logic
@@ -69,9 +70,10 @@ begin
                         and in_ack_slot = '0'
                         and driven_bit /= can_rx)
               else '0';
-  arb_abort_s <= '1' when (sample_pt = '1' and fg_active = '1'
-                           and fg_in_arb = '1'
-                           and driven_bit = '1' and can_rx = '0')
+  arb_abort_s <= '1' when (abort_in = '1')
+                      or (sample_pt = '1' and fg_active = '1'
+                          and fg_in_arb = '1'
+                          and driven_bit = '1' and can_rx = '0')
                  else '0';
   u_timing : entity work.bit_timing
     generic map (

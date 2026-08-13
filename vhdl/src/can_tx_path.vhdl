@@ -74,6 +74,8 @@ entity can_tx_path is
     bit_err     : out std_logic;   -- pulse: transmitted bit did not
                                    -- match the bus (bit error)
     in_ack_slot : in  std_logic;   -- suppress monitoring here
+    abort_in    : in  std_logic;   -- external abort: drop the frame
+                                   -- in progress (bus-off)
     arb_lost    : out std_logic;   -- pulse: lost arbitration
     ack_ok      : out std_logic;   -- pulse: ACK slot was dominant
     ack_err     : out std_logic    -- pulse: nobody acknowledged
@@ -153,9 +155,12 @@ begin
                         and driven_bit /= can_rx)
               else '0';
 
-  arb_abort_s <= '1' when (sample_pt = '1' and fg_active = '1'
-                           and fg_in_arb = '1'
-                           and driven_bit = '1' and can_rx = '0')
+  -- abort_in reuses the arbitration-abort path: both mean "stop
+  -- transmitting this frame right now and release the bus".
+  arb_abort_s <= '1' when (abort_in = '1')
+                      or (sample_pt = '1' and fg_active = '1'
+                          and fg_in_arb = '1'
+                          and driven_bit = '1' and can_rx = '0')
                  else '0';
 
   -- ============ bit timing: one pulse per bit slot ============

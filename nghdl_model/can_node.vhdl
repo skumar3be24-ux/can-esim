@@ -79,6 +79,9 @@ architecture rtl of can_node is
   signal bit_err_s  : std_logic;
   signal in_ack_s   : std_logic;
   signal tx_err_any : std_logic;
+  signal tx_req_gated : std_logic;
+  signal busoff_d1    : std_logic := '0';
+  signal busoff_edge  : std_logic;
 begin
   u_tx : entity work.can_tx_path
     generic map (
@@ -88,7 +91,7 @@ begin
     )
     port map (
       clk => clk, reset_n => reset_n,
-      frame_start => tx_req,
+      frame_start => tx_req_gated,
       id_in   => tx_id,
       rtr_in  => tx_rtr,
       dlc_in  => tx_dlc,
@@ -102,6 +105,7 @@ begin
       stuff_now => stuff_now,
       bit_err     => bit_err_s,
       in_ack_slot => in_ack_s,
+      abort_in    => busoff_edge,
       arb_lost => arb_lost_s,
       ack_ok => ack_ok_s,
       ack_err => ack_err_s
@@ -147,6 +151,16 @@ begin
       crc_clr => rcrc_clr, crc_en => rcrc_en,
       crc_in => rcrc_bit, crc_out => rcrc_val
     );
+  tx_req_gated <= tx_req and (not em_busoff);
+  process(clk, reset_n)
+  begin
+    if reset_n = '0' then
+      busoff_d1 <= '0';
+    elsif rising_edge(clk) then
+      busoff_d1 <= em_busoff;
+    end if;
+  end process;
+  busoff_edge <= em_busoff and (not busoff_d1);
   in_ack_s <= '1' when (tx_field = x"9" or tx_field = x"A"
                         or tx_field = x"B") else '0';
   any_rx_err <= (rx_crc_s or rx_form_s or rxs_stuff_err)
