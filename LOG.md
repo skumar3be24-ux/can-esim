@@ -480,3 +480,13 @@
 - The earlier python3.10 crash was NOT disk this time (57 GB free) and left no
   traceback - a one-off. The "please select the project first" message that
   followed was a separate, expected condition
+
+## Day 42 (cont) - can_phy schematic symbol generated
+- Wrote a 5-pin can_phy symbol into /usr/share/kicad/symbols/eSim_Subckt.kicad_sym
+  (tools/make_can_phy_symbol.py, needs sudo - system path)
+- Reference prefix is X, so instances are X1/X2 automatically and SubcircuitTab
+  recognises them
+- Pin NUMBERS follow the .subckt port order txa(1) txb(2) rxo(3) vcc(4) gnd(5);
+  positions are cosmetic but numbers determine netlist net order
+- All infrastructure for the schematic now exists: can_node_top symbol, can_phy
+  symbol, verified can_phy.sub, and the attachment mechanism
