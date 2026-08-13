@@ -316,3 +316,12 @@
   silently returns 0. Must tap through a dac_bridge first - Day 11 did this and
   I did not carry it forward. Nearly concluded the design was broken
 - NGHDL "Add Files" does copy dependencies; only the build script was limited
+
+## Day 33 - error management and fault confinement (Phase 5 begins)
+- error_mgmt.vhdl: TEC/REC counters, error-active / error-passive / bus-off
+- 10 of 10 checks pass first run, both boundaries exact (128 and 256)
+- Recovery verified on precisely the 128th idle sequence, counters cleared
+- The asymmetry is the design: +8 per error, -1 per success, so eight successes
+  are needed to undo one failure
+- NOT VERIFIED and flagged: the REC>127 reception band (we use 127), and
+  simultaneous error+success in one cycle (the if/elsif favours the error)

@@ -1048,3 +1048,50 @@ resolved it.
 ### NGHDL "Add Files" DOES copy dependencies
 All seven dependency files were copied into DUTghdl/ by the GUI. The multi-file
 limitation was entirely in the generated build script, not the upload path.
+
+## Day 33 - Error management and fault confinement (vhdl/src/error_mgmt.vhdl)
+
+TEC and REC counters with the three fault-confinement states. This is what stops
+one broken node from taking down a network.
+
+### RESULT: 10 of 10 checks pass, first run
+
+| Check | Result |
+|---|---|
+| 1 reset state | TEC=0, REC=0, error-active |
+| 2 transmit error | TEC +8 |
+| 3 success | TEC -1 only; 8 successes to undo 1 error |
+| 4 no underflow | TEC stays 0 |
+| 5 receive error | REC +1, success -1 |
+| 6 big receive error | REC +8 |
+| 7 passive boundary | TEC=120 active, TEC=128 PASSIVE |
+| 8 bus-off boundary | TEC=248 passive, TEC=256 BUS-OFF |
+| 9 bus-off is absorbing | further errors change nothing |
+| 10 recovery | 127 idles still off, 128th recovers with counters cleared |
+
+### THE ASYMMETRY IS THE DESIGN
++8 for causing an error, -1 for success. A node must succeed EIGHT times to undo
+one failure, so a genuinely faulty node degrades quickly while occasional noise
+is forgiven slowly. Checks 2-4 verify exactly this ratio.
+
+### STATES
+  ERROR ACTIVE   TEC<128 and REC<128. Sends DOMINANT error flags, actively
+                 destroying frames it believes are bad.
+  ERROR PASSIVE  either counter >=128. Sends RECESSIVE error flags, which do not
+                 disturb the bus. A degraded node stops shouting but keeps
+                 listening.
+  BUS OFF        TEC>=256. Disconnects. Recovery needs 128 occurrences of 11
+                 consecutive recessive bits.
+
+The boundary checks matter most: off-by-one at 127/128 is the classic fault
+confinement bug, where a node either mutes itself one error early or keeps
+shouting when it should have stopped.
+
+### TWO PATHS DELIBERATELY NOT VERIFIED - stated rather than hidden
+1. When REC>127 a successful reception should set REC into the 119..127 band
+   rather than decrementing. We use 127. No test exercises this path, so it is
+   unverified in either direction.
+2. Simultaneous events. The if/elsif chain silently favours the error over the
+   success when both pulse in the same cycle. Arguably correct, but it was an
+   implicit consequence of the coding style rather than a deliberate decision,
+   and the testbench never pulses two at once.
