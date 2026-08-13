@@ -95,3 +95,15 @@
 - Input-range violation at +/-12 V documented as a model limitation: real
   transceivers saturate there, tanh comparator does not
 - Both netlists kept - the broken one documents a real and instructive mistake
+
+## Day 20 - multi-bit-rate validation
+- Day 18 prediction CONFIRMED: 1 Mbit/s over 220 m misses the bit entirely
+- vdb = 1.5e-07 V at the 1 Mbit/s sample point - sampled 388 ns before arrival
+- 500 kbit/s and 125 kbit/s both read 1.996406 V correctly (one-way)
+- I predicted 500 k would be marginal; it had 362 ns slack. Over-hedged.
+- KEY: separated the one-way reception constraint from the round-trip
+  arbitration constraint. 500 k over 220 m receives fine but arbitration is
+  impossible (round trip 2.27 us > 2.00 us bit time)
+- Derived max length per rate for our 5/16 PROP_SEG: 220 m / 32.5 m / 1.25 m
+- Documented why these fall short of real CAN: allocation must be re-derived
+  per rate, real high-rate timing uses a much larger PROP_SEG fraction

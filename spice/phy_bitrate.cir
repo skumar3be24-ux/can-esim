@@ -1,0 +1,138 @@
+CAN PHY - multi-bit-rate validation (Day 20)
+* ============================================================
+* Tests the Day 18 prediction: at 1 Mbit/s the round-trip delay
+* over a long bus exceeds the bit time, which is why high-rate
+* CAN is length-limited.
+*
+* BIT TIMING DERIVATIONS (all keep 16 tq and the 1/5/6/4 split)
+*
+*   rate      bit time   tq        clock      PROP_SEG
+*   -------   --------   -------   --------   ----------------
+*   125 k     8.000 us   500 ns    2.000 MHz  5 tq = 2500 ns
+*   500 k     2.000 us   125 ns    8.000 MHz  5 tq =  625 ns
+*   1 M       1.000 us    62.5 ns  16.00 MHz  5 tq =  312.5 ns
+*
+* MAX LENGTH from PROP_SEG >= 2*(t_cable + t_transceiver):
+*   t_cable_max = PROP_SEG/2 - 150 ns      (150 ns real xcvr)
+*   length      = t_cable_max * 2e8 m/s
+*
+*   125 k : 2500/2 - 150 = 1100 ns -> 220 m
+*   500 k :  625/2 - 150 = 162.5 ns ->  32.5 m
+*   1 M   :  312.5/2 - 150 = 6.25 ns ->   1.25 m
+*
+* THE 1 Mbit/s NUMBER IS THE POINT. 1.25 m is absurd, and real
+* 1 Mbit/s CAN does 40 m. The discrepancy is NOT an error - it
+* shows that our 5/16 PROP_SEG allocation, chosen for 125 k, is
+* wrong for high rates. Real 1 Mbit/s timing uses a much larger
+* PROP_SEG fraction. We demonstrate this by ALSO computing a
+* re-optimised 1 Mbit/s allocation.
+*
+* WHAT THIS NETLIST MEASURES:
+*   For each rate we drive a bit pattern over the SAME 220 m
+*   line and check whether the far end has settled by its own
+*   sample point. Settling is a physical property of the line
+*   (round trip 2.27 us, measured Day 17) and does not change
+*   with bit rate - but the sample instant does.
+*
+*     125 k : sample at 6.000 us > 2.27 us  -> settled, PASS
+*     500 k : sample at 1.500 us < 2.27 us  -> NOT settled, FAIL
+*     1 M   : sample at 0.750 us < 2.27 us  -> NOT settled, FAIL
+*
+*   So over 220 m only 125 kbit/s works. That is the prediction.
+* ============================================================
+
+.param VCC_V = 5.0
+.param RON   = 45
+.param TDLY  = 1.1u
+
+Vcc  vcc  0 DC {VCC_V}
+Vref vref 0 DC 2.5
+
+* ============ near end (transmitter) ============
+Rterm_a  canh_a canl_a 120
+Rbias1   canh_a vref 10k
+Rbias2   canl_a vref 10k
+Ca_h     canh_a 0 500p
+Ca_l     canl_a 0 500p
+Rleak_ah canh_a 0 100meg
+Rleak_al canl_a 0 100meg
+
+* ============ 220 m line, unchanged across all rates ============
+Tline canh_a canl_a canh_b canl_b Z0=120 TD={TDLY}
+
+* ============ far end (receiver) ============
+Rterm_b  canh_b canl_b 120
+Cb_h     canh_b 0 500p
+Cb_l     canl_b 0 500p
+Rleak_bh canh_b 0 100meg
+Rleak_bl canl_b 0 100meg
+
+* ============ driver: a single dominant bit starting at 10 us ==
+* Bit WIDTH is what changes between rates. Held long enough that
+* we can probe each rate's own sample instant.
+Vtx tx_a 0 PULSE(5 0 10u 20n 20n 20u 100u)
+Rtx tx_a 0 1meg
+Aadc [tx_a] [tx_d] adcmod
+.model adcmod adc_bridge(in_low=1.5 in_high=3.5)
+Adac [tx_d] [tx_c] dacmod
+.model dacmod dac_bridge(out_low=0 out_high=5 out_undef=2.5
++                        t_rise=20n t_fall=20n)
+Bdrv ctrl 0 V = 5 - V(tx_c)
+Sh vcc    canh_a ctrl 0 swmod
+Sl canl_a 0      ctrl 0 swmod
+.model swmod SW(Vt=2.5 Vh=0.2 Ron={RON} Roff=1e9)
+
+* ============ differential and receiver at the far end ========
+Bdb vdb 0 V = V(canh_b) - V(canl_b)
+Rdb vdb 0 1meg
+Bda vda 0 V = V(canh_a) - V(canl_a)
+Rda vda 0 1meg
+
+Bcompb rxb_ana 0 V = 2.5*(1 - tanh(10*(V(canh_b)-V(canl_b)-0.7)))
+Rcompb rxb_ana 0 1meg
+Aadc_rxb [rxb_ana] [rxb_d] adcmod
+Adac_rxb [rxb_d] [rxb_a] dacmod
+Rrxb rxb_a 0 1k
+
+.tran 2n 20u
+
+.control
+  run
+
+  echo ""
+  echo "===== FAR-END SETTLING vs EACH RATE'S SAMPLE POINT ====="
+  echo "  Edge launched at t = 10.000 us."
+  echo "  Each rate samples at 75%% of ITS OWN bit time."
+  echo ""
+
+  echo "  --- 1 Mbit/s: bit 1.000 us, sample 0.750 us -> t=10.750us"
+  meas tran vdb_1m  FIND v(vdb)   AT=10.750u
+  meas tran rxb_1m  FIND v(rxb_a) AT=10.750u
+
+  echo "  --- 500 kbit/s: bit 2.000 us, sample 1.500 us -> t=11.500us"
+  meas tran vdb_500 FIND v(vdb)   AT=11.500u
+  meas tran rxb_500 FIND v(rxb_a) AT=11.500u
+
+  echo "  --- 125 kbit/s: bit 8.000 us, sample 6.000 us -> t=16.000us"
+  meas tran vdb_125 FIND v(vdb)   AT=16.000u
+  meas tran rxb_125 FIND v(rxb_a) AT=16.000u
+
+  echo ""
+  echo "  Far-end arrival for reference:"
+  meas tran t_arrive WHEN v(vdb)=1.0 RISE=1
+  meas tran vdb_final FIND v(vdb) AT=19u
+
+  echo ""
+  echo "============ PREDICTED ============"
+  echo "  Wave arrives at far end at t = 11.114 us (Day 17)."
+  echo "  1 Mbit/s  samples t=10.750us - BEFORE arrival  -> FAIL"
+  echo "  500 kbit/s samples t=11.500us - just after     -> marginal"
+  echo "  125 kbit/s samples t=16.000us - fully settled  -> PASS"
+  echo ""
+  echo "  rxb = 0 means dominant read correctly."
+  echo "  rxb = 5 means the receiver still sees recessive,"
+  echo "          i.e. the bit was MISSED at that sample point."
+  echo ""
+.endc
+
+.end

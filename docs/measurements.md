@@ -239,3 +239,66 @@ CONSEQUENCE: the ISO 11898-2 requirement of -2 V to +7 V exists because of the
 TRANSCEIVER INPUT RANGE, not because differential signalling degrades. Within
 -7..+7 V our node B pins stay inside +/-12 V and the model is trustworthy.
 Outside that, it is optimistic.
+
+## Day 20 - Multi-bit-rate validation (spice/phy_bitrate.cir)
+
+Tests the Day 18 prediction that high-rate CAN is length-limited. Same 220 m
+line, same driver, same receiver - only the sample instant changes.
+
+### BIT TIMING DERIVATIONS (16 tq, 1/5/6/4 split, 75% sample point)
+
+| Rate | Bit time | tq | VHDL clock | PROP_SEG | Sample at |
+|---|---|---|---|---|---|
+| 125 kbit/s | 8.000 us | 500 ns | 2.000 MHz | 2500 ns | 6.000 us |
+| 500 kbit/s | 2.000 us | 125 ns | 8.000 MHz | 625 ns | 1.500 us |
+| 1 Mbit/s | 1.000 us | 62.5 ns | 16.000 MHz | 312.5 ns | 0.750 us |
+
+### MEASURED - edge launched at t = 10.000 us, arrives 11.1385 us
+
+| Rate | Sample instant | vdb at sample | RX | Verdict |
+|---|---|---|---|---|
+| 1 Mbit/s | 10.750 us | 1.50e-07 V | 5 V rec | BIT MISSED |
+| 500 kbit/s | 11.500 us | 1.996406 V | 0 V dom | reads |
+| 125 kbit/s | 16.000 us | 1.996406 V | 0 V dom | reads |
+
+The 1 Mbit/s failure is absolute, not marginal. vdb = 1.5e-07 V means the far
+end is still fully recessive: the receiver sampled 388 ns BEFORE the wave
+arrived. Transmitter driving dominant, receiver reading recessive, and no
+threshold or noise-margin change can fix it. This is the physical mechanism
+behind the CAN bit-rate/length trade-off.
+
+I predicted 500 kbit/s would be marginal. It was not - 362 ns of slack after a
+~20 ns edge. Over-hedged.
+
+### TWO INDEPENDENT CONSTRAINTS - the real lesson
+
+This netlist tests ONE-WAY RECEPTION only. Arbitration imposes a separate and
+stricter round-trip constraint, because a node must transmit recessive and
+detect another node dominant WITHIN THE SAME BIT TIME.
+
+  one-way   (reception)   : t_cable < sample instant
+  round-trip(arbitration) : 2*(t_cable + t_trx) < PROP_SEG
+
+| Rate | One-way | Round trip | Result |
+|---|---|---|---|
+| 125 k | 1.114 < 6.000 PASS | 2.271 < 2.500 PASS | works |
+| 500 k | 1.114 < 1.500 PASS | 2.271 > 0.625 FAIL | arbitration dies |
+| 1 M | 1.114 > 0.750 FAIL | 2.271 > 0.3125 FAIL | both die |
+
+500 kbit/s over 220 m would RECEIVE DATA CORRECTLY and FAIL ARBITRATION
+COMPLETELY. Testing reception alone gives a false pass. Day 18 conflated these
+two constraints; they are now separated with numbers.
+
+### MAX LENGTH per rate with OUR 5/16 PROP_SEG allocation
+  t_cable_max = PROP_SEG/2 - 150 ns (real transceiver), length = t * 2e8
+
+  125 k : 2500/2 - 150 = 1100 ns  -> 220 m
+  500 k :  625/2 - 150 = 162.5 ns ->  32.5 m
+  1 M   :  312.5/2 - 150 = 6.25 ns ->  1.25 m
+
+Real CAN achieves 100 m at 500 k and 40 m at 1 M. The discrepancy is NOT an
+error in this analysis - it shows the 1/5/6/4 split, derived for 125 kbit/s over
+a long bus, is wrong for high rates. Real high-rate timing allocates a much
+larger PROP_SEG fraction (8/16 or more). The correct conclusion is that the
+segment allocation must be re-derived per rate, not that CAN is limited to
+1.25 m at 1 Mbit/s.
