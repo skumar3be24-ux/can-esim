@@ -846,3 +846,61 @@ bit-aligned by construction. Real nodes have independent oscillators and
 resynchronise on edges using the Day 22 logic. Testing arbitration with skewed,
 independently-clocked nodes is a separate exercise (Day 71 in the roadmap covers
 the cable-length limit, which is the same phenomenon).
+
+## Day 31 - can_node wrapper and two-node bus (vhdl/src/can_node.vhdl)
+
+One self-contained CAN node: transmit path, receive chain, ACK gating and bus
+contribution in a single entity. This is the unit that becomes the NGHDL model,
+so the port list is kept flat - NGHDL parses it line by line and is formatting
+sensitive (Day 11).
+
+### RESULT: 4 of 4 tests pass, first run, no bugs found
+
+| Test | Setup | Result |
+|---|---|---|
+| 1 | node 0 transmits | node 1 received ID and data, node 0 got ACK |
+| 2 | node 1 transmits | node 0 received ID and data, node 1 got ACK |
+| 3 | both transmit | node 1 lost arbitration AND still received node 0 frame intact |
+| 4 | node 1 absent | node 0 reported tx_noack, did NOT ack itself |
+
+First day in the project with no RTL bug and no testbench bug. That is a direct
+consequence of every submodule having been verified in isolation first.
+
+### TEST 3 IS THE STRUCTURAL ONE
+It exercises arbitration, ACK, transmit and receive simultaneously. Node 1 loses
+the contest and must ALSO correctly receive node 0 frame. A losing node that
+corrupted the bus, or failed to switch to receiving, would fail here even though
+the Day 30 arbitration test passed. Non-destructive arbitration confirmed: the
+collision cost no bandwidth and the winner frame arrived intact.
+
+### TEST 4 - A TRANSMITTER MUST NOT ACK ITSELF
+In CAN the ACK comes from OTHER nodes. A transmitter that acknowledged itself
+would always see a dominant ACK slot and could never detect that nobody heard it
+- the entire Day 29 ack_err path would be silently dead. Implemented as
+
+  ack_drive_eff <= ack_drive_raw and (not tx_active);
+
+and verified by removing the other node and requiring tx_noack.
+
+### DESIGN NOTES
+- ONE bit_timing per node, inside can_tx_path, drives BOTH directions. A node has
+  a single view of where bit boundaries are; separate transmit and receive timing
+  would be wrong.
+- SELF-RECEPTION is deliberate. The receive chain sees this node own transmitted
+  bits because can_rx carries whatever is on the wire. That is how the
+  transmitter monitors the bus for arbitration (Day 30) and the ACK slot (Day 29).
+- can_tx <= tx_bit_out and (not ack_drive_eff) - the node pulls the bus dominant
+  either by transmitting a dominant bit or by driving the ACK.
+
+### STATE OF PHASE 4
+Transmit, receive, arbitration and ACK all work between real nodes. What remains
+for a protocol-complete controller: error frames, TEC/REC counters, error-active
+/ error-passive / bus-off states, and automatic retransmission after losing
+arbitration. That is Phase 5.
+
+### OPPORTUNITY - pull the NGHDL integration forward
+can_node is now a single entity with a flat port list, which is exactly what
+NGHDL needs. The roadmap puts mixed-signal integration at Day 59, and it is the
+largest remaining unknown: the Day 11 benchmark was ONE trivial instance at
+4.9 s, and four full controllers could be 10-50x that. Testing it now, while the
+node is simple, would retire that risk far earlier than planned.

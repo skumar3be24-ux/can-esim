@@ -262,3 +262,19 @@
   a competing dominant bit needs 1.11 us to arrive (Day 17)
 - SIMPLIFICATION: nodes share a clock and start aligned. Independent oscillators
   with resync is a separate test
+
+## Day 31 - can_node wrapper and two-node bus
+- can_node.vhdl: complete node - TX path, RX chain, ACK gating, bus contribution
+- 4 of 4 tests pass FIRST RUN with no bugs. First clean day of the project,
+  because every submodule was verified in isolation first
+- Test 3: both nodes transmit, node 1 loses arbitration AND still receives
+  node 0 frame intact - non-destructive arbitration confirmed end to end
+- Test 4: with node 1 absent, node 0 reports tx_noack. A transmitter must not
+  ACK its own frame or the whole no-ACK detection path is dead
+- One bit_timing per node drives both directions; self-reception is deliberate
+  and is how arbitration and ACK monitoring work
+- PHASE 4 SUBSTANTIALLY DONE: TX, RX, arbitration, ACK all working between nodes
+- REMAINING for protocol completeness: error frames, TEC/REC, bus-off,
+  retransmission after arbitration loss (Phase 5)
+- can_node has a flat port list = NGHDL ready. Roadmap puts mixed-signal at
+  Day 59; pulling it forward would retire the biggest remaining unknown early
