@@ -25,3 +25,6 @@ esim_workspace
 .DS_Store
 *~
 client.log
+vhdl/*_vectors.txt
+vhdl/*.vcd
+vhdl/work-obj93.cf

@@ -523,3 +523,84 @@ value the receiver can never match.
    could in principle be silently truncated. Earlier runs all printed their
    final PASSED line so they genuinely completed, but that was luck. Future
    testbenches should carry a completion guard.
+
+## Day 26 - Frame generator (vhdl/src/frame_gen.vhdl, tools/frame_ref.py)
+
+Assembles a complete standard CAN data frame and emits one bit per bit_en pulse,
+driving crc15 as a submodule. First point where verified modules run as a system.
+
+### RESULT: 68 of 68 frames bit-exact, zero stuff_en mismatches
+
+Checked against tools/frame_ref.py, written from ISO 11898-1 and not from the
+RTL. Every bit AND every stuff_en value compared.
+
+Vector set (seed 20260813): frozen node IDs 0x0A5 / 0x123 / 0x2AA at DLC 0,
+DLC 1 and DLC 8 on the primary ID, all-zero ID+data (max dominant run), all-ones
+ID+data (max recessive run), an RTR frame, and 60 random frames.
+
+### FRAME LAYOUT AND STUFF SCOPE
+
+| Field | Bits | Stuffed |
+|---|---|---|
+| SOF | 1 | yes |
+| Identifier | 11 | yes |
+| RTR | 1 | yes |
+| IDE | 1 | yes |
+| r0 | 1 | yes |
+| DLC | 4 | yes |
+| Data | 0-64 | yes |
+| CRC sequence | 15 | yes |
+| CRC delimiter | 1 | NO |
+| ACK slot | 1 | NO |
+| ACK delimiter | 1 | NO |
+| EOF | 7 | NO |
+| IFS | 3 | NO |
+
+DLC=0: 44 frame bits + 3 IFS = 47 emitted, 34 stuffed
+DLC=8: 108 frame bits + 3 IFS = 111 emitted, 98 stuffed
+
+Hand-verified frame for ID 0x0A5 DLC 0:
+  00001010010100000001000101101001001111111111111
+  SOF=0 | ID=00010100101 (0x0A5) | RTR=0 | IDE=0 | r0=0 | DLC=0000
+  | CRC=100010110100100 (0x45A4) | delim=1 | ACK=1 | delim=1
+  | EOF=1111111 | IFS=111
+stuff_en high for bits 0-33 (34 bits), dropping exactly at the CRC delimiter.
+CRC 0x45A4 matches the Day 25 reference value for the same frame - two
+independently written models agreeing.
+
+### DESIGN CORRECTION - frame_active must drop at END OF EOF
+I initially held frame_active through IFS. Interframe space is NOT part of the
+frame: the frame ends after EOF, and IFS is the mandatory gap BEFORE the next
+frame, during which the bus is IDLE and any node may start transmitting.
+Holding frame_active through IFS would block arbitration for 3 bit times in
+Phase 4. Fixed in both the RTL and the reference model.
+
+### THE STUFF BOUNDARY
+stuff_en is high from SOF through the LAST CRC bit and low from the CRC
+delimiter onward. One bit either way corrupts every frame. Verified bit-exactly
+across all 68 frames rather than left as a comment.
+
+### CRC COVERAGE
+crc_en is asserted only from SOF through the end of the data field. The CRC does
+NOT cover itself, and does not cover any field after it. Because frame_gen emits
+payload bits with the stuffer downstream, the CRC is automatically computed on
+DESTUFFED bits.
+
+### THE ONLY BUG - my file parser, again (5th day running)
+When data bytes are present the parse loop consumes the trailing space via
+"exit when ch = Z Z", then an unconditional read(vline, space) swallowed the
+first digit of nbits - 55 parsed as 5. That misaligned the expected bit and
+stuff strings and produced a nonsensical stuff_en=0 expectation inside the
+identifier field. The asymmetry was the trap: the no-data branch reads one
+character and LEAVES the separator; the hex branch reads THROUGH it. Both then
+ran the same cleanup.
+
+All three RTL failure points I predicted in advance - the ST_CRC latch timing,
+the DLC=0 direct path, and the data-field bit indexing - were correct first run.
+Frames 1-3 passed completely before the parser broke on frame 4, which localised
+it immediately.
+
+### REPO HYGIENE
+Added .gitignore for vhdl/*_vectors.txt, vhdl/*.vcd and vhdl/work-obj93.cf, and
+untracked crc_vectors.txt. Generated artefacts are reproducible from the tools
+with fixed seeds and do not belong in the repo.

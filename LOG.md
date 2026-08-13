@@ -174,3 +174,19 @@
   risk
 - Two more VHDL gotchas: std_logic_textio needs -fsynopsys (dropped it), and
   slicing an unconstrained function result mixes index directions
+
+## Day 26 - frame generator
+- frame_gen.vhdl assembles a full standard CAN frame, drives crc15 as a submodule
+- 68 of 68 frames bit-exact against an independent reference, zero stuff_en errors
+- Covers DLC 0-8, all-zero and all-ones payloads, RTR, and 60 random frames
+- Hand-verified the ID 0x0A5 DLC 0 frame field by field; CRC 0x45A4 matches the
+  Day 25 reference value, so two independent models agree
+- DESIGN FIX: frame_active now drops at the end of EOF, not after IFS. IFS is not
+  part of the frame - the bus is idle during it and any node may transmit.
+  Holding it high would have blocked arbitration for 3 bit times in Phase 4
+- Stuff boundary verified bit-exactly: high SOF..last CRC bit, low from the CRC
+  delimiter onward
+- Only bug was my file parser: after reading a hex data token the loop had
+  already consumed the separator, so an extra read swallowed a digit of nbits
+  (55 -> 5). All three predicted RTL failure points were correct first run
+- Gitignored generated vectors and VCDs; untracked crc_vectors.txt
