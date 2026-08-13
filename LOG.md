@@ -440,3 +440,21 @@
 - docs/handoff.md rewritten - it still described Day 1 (no VHDL written, mixed
   signal unproven). Now reflects a complete verified protocol
 - Recorded the six upstream eSim/NGHDL bugs in one place for submission
+
+## Day 42 - eSim project path: symbol and PHY subcircuit
+- FOSSEE requirements confirmed: submission needs a REAL eSim project (.sch, .pro,
+  .cir, cache.bak, .lib.xml) plus VHDL files, an abstract PDF, and a proposal
+  approved up to 7 working days in advance
+- KiCad symbol for can_node_top now generated. The key finding: symbol creation
+  only runs when NGHDL is launched FROM eSim (esimFlag == 1 in ngspice_ghdl.py).
+  Running nghdl standalone builds the ngspice model but never the symbol - which
+  is what the "use NGHDL through eSim" message meant each time
+- Symbol has 13 generic pins mapping positionally to connection_info.txt:
+    in1 clk, in2 reset_n, in3 can_rx, in4 tx_req, in5 id_sel(1), in6 id_sel(0)
+    out1 can_tx, out2 tx_busy, out3 tx_done, out4 arb_lost, out5 rx_valid,
+    out6 err_frame, out7 bus_off
+- eSim provides symbols for everything except B-sources and SW switches, so the
+  analog PHY is packaged as spice/can_phy.sub - a subcircuit may contain any
+  ngspice syntax, and .sub is an expected submission file anyway
+- Subcircuit verified standalone before any GUI work: receiver output measured
+  5.0 V recessive, 0.0 V dominant, 5.0 V recessive again
