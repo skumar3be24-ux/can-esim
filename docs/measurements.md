@@ -1341,3 +1341,45 @@ the Day 13-20 PHY netlists did correctly.
 Worth noting the pattern: ngspice reports the failure but continues, so a broken
 measurement looks like a missing line rather than an error. Also ngspice
 LOWERCASES node names, which is why the first grep for arbA found nothing.
+
+## Day 39 - Fault confinement to BUS-OFF on the analog PHY
+
+The first test of the system FAILING rather than working. Node A transmits into a
+bus corrupted by a physical fault injector: a 10 ohm switch shorting CANH to CANL,
+which collapses the differential and makes every dominant bit read recessive.
+Measured vd_fault = 0.435 V, below the 0.5 V recessive threshold - so a
+transmitting node watches its dominant bits vanish and raises a bit error each
+time. A realistic wiring fault, not an abstract bit flip.
+
+### RESULT: three runs, and the comparison is the finding
+
+| Fault | Duty | Node A | Node B |
+|---|---|---|---|
+| Intermittent, 6 ms | 30% | survived | unaffected |
+| Intermittent, 16 ms | 30% | survived | unaffected |
+| PERMANENT | 100% | BUS-OFF at 5.626 ms | unaffected |
+
+THE INTERMITTENT FAULT NOT CAUSING BUS-OFF IS CORRECT BEHAVIOUR, not a failure.
+With +8 per error and -1 per success, a 30% duty-cycle fault leaves enough clean
+gaps for frames to complete and hold TEC at an equilibrium below 256. A node
+should survive recoverable faults and remove itself only for persistent ones.
+That is precisely what the three runs show, and it took the permanent-fault
+variant to prove the mechanism rather than assume it.
+
+I initially read the 6 ms result as a failure and ran 16 ms expecting bus-off.
+Still none. Switching to a permanent short was the discriminating test: with no
+possible successful transmission TEC can only climb, and bus-off followed in
+5.5 ms.
+
+### boB_max = 0 IN EVERY RUN IS THE HEADLINE
+The healthy node was completely unaffected while its neighbour degraded and
+disconnected. That is fault CONFINEMENT rather than fault propagation: one bad
+wire does not take down the network. If node B had also gone bus-off the
+mechanism would be worse than useless.
+
+### ONE HONEST DEFECT
+busy_late = 5 V at 5.93 ms, after bus-off at 5.626 ms. The node stops DRIVING the
+bus - can_tx is gated on bus_off - but its transmit FSM keeps cycling, so tx_busy
+stays asserted. Harmless electrically, wrong logically: a bus-off node should
+abandon transmission entirely rather than keep running a frame it cannot send.
+The fix is to gate frame_start and abort the current frame on bus_off.

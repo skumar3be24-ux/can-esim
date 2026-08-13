@@ -1,0 +1,185 @@
+CAN mixed-signal - driving a node to BUS-OFF (Day 39)
+* ============================================================
+* The complete fault-confinement chain on the analog PHY.
+*
+* Node A transmits repeatedly into a bus that is periodically
+* corrupted by a fault injector. Each corrupted frame produces
+* bit errors, TEC climbs by 8 each time, and the node should
+* progress:
+*
+*   error-active  -> error-passive (TEC >= 128)
+*                 -> BUS OFF       (TEC >= 256)
+*
+* WHY THIS MATTERS
+*   Fault confinement is what makes CAN usable in a car. A node
+*   with a broken transceiver must remove itself from the bus
+*   rather than jam it forever. Everything up to now has shown
+*   the protocol working; this shows it FAILING SAFELY.
+*
+* THE FAULT INJECTOR
+*   Vfault pulls CANH to CANL through a low resistance for a few
+*   bit times, periodically. That is electrically a partial short
+*   across the differential pair - a realistic wiring fault, not
+*   an abstract "flip a bit".
+*
+* EXPECTED TIMELINE
+*   ~32 bit errors are needed for bus-off at +8 each.
+*   Day 36 measured about 3 bit errors per corrupted frame, so
+*   roughly 11 corrupted frames, about 5 ms.
+*
+* NODE B is present and healthy, so it can acknowledge frames
+* when they are not corrupted - otherwise every frame would fail
+* for lack of an ACK and the test would prove nothing about
+* the fault injector.
+* ============================================================
+
+.param VCC_V = 5.0
+.param RON   = 45
+
+Vcc  vcc  0 DC {VCC_V}
+Vref vref 0 DC 2.5
+
+Vclk clk_a 0 PULSE(0 5 0 5n 5n 245n 500n)
+Rclk clk_a 0 1meg
+
+Vrst rst_a 0 PWL(0 0  1.9u 0  2.0u 5)
+Rrst rst_a 0 1meg
+
+* ============ node A transmits repeatedly ============
+* a request every 500 us, so a new frame starts as soon as the
+* previous one finishes or is destroyed
+VreqA reqA_a 0 PULSE(0 5 10u 20n 20n 2u 500u)
+RreqA reqA_a 0 1meg
+
+* node B never transmits - it only listens and acknowledges
+VreqB reqB_a 0 DC 0
+RreqB reqB_a 0 1meg
+
+* ============ id_sel ============
+VsA1 selA1 0 DC 0
+VsA0 selA0 0 DC 0
+VsB1 selB1 0 DC 0
+VsB0 selB0 0 DC 5
+RsA1 selA1 0 1meg
+RsA0 selA0 0 1meg
+RsB1 selB1 0 1meg
+RsB0 selB0 0 1meg
+
+.model adcmod adc_bridge(in_low=1.5 in_high=3.5)
+.model dacmod dac_bridge(out_low=0 out_high=5 out_undef=2.5
++                        t_rise=20n t_fall=20n)
+
+Aclk  [clk_a]  [clk_d]  adcmod
+Arst  [rst_a]  [rst_d]  adcmod
+AreqA [reqA_a] [reqA_d] adcmod
+AreqB [reqB_a] [reqB_d] adcmod
+AsA1  [selA1] [selA1_d] adcmod
+AsA0  [selA0] [selA0_d] adcmod
+AsB1  [selB1] [selB1_d] adcmod
+AsB0  [selB0] [selB0_d] adcmod
+Arx   [rx_ana] [rx_d]   adcmod
+
+* ============ two controllers ============
+aA [clk_d] [rst_d] [rx_d] [reqA_d] [selA1_d selA0_d]
++  [txA_d] [busyA_d] [doneA_d] [arbA_d] [rxvA_d]
++  [efA_d] [boA_d] nodeA
+.model nodeA can_node_top(rise_delay=1.0e-9 fall_delay=1.0e-9
++                         input_load=1.0e-12 instance_id=1)
+
+aB [clk_d] [rst_d] [rx_d] [reqB_d] [selB1_d selB0_d]
++  [txB_d] [busyB_d] [doneB_d] [arbB_d] [rxvB_d]
++  [efB_d] [boB_d] nodeB
+.model nodeB can_node_top(rise_delay=1.0e-9 fall_delay=1.0e-9
++                         input_load=1.0e-12 instance_id=2)
+
+* ============ measurement taps ============
+AmefA [efA_d]  [efA_a]  dacmod
+AmboA [boA_d]  [boA_a]  dacmod
+AmboB [boB_d]  [boB_a]  dacmod
+AmdnA [doneA_d] [doneA_a] dacmod
+AmbsA [busyA_d] [busyA_a] dacmod
+AmrvB [rxvB_d]  [rxvB_a]  dacmod
+RmefA efA_a 0 1meg
+RmboA boA_a 0 1meg
+RmboB boB_a 0 1meg
+RmdnA doneA_a 0 1meg
+RmbsA busyA_a 0 1meg
+RmrvB rxvB_a 0 1meg
+
+* ============ drivers ============
+AdacA [txA_d] [txA_a] dacmod
+AdacB [txB_d] [txB_a] dacmod
+BdrvA ctrlA 0 V = 5 - V(txA_a)
+BdrvB ctrlB 0 V = 5 - V(txB_a)
+
+.model swmod SW(Vt=2.5 Vh=0.2 Ron={RON} Roff=1e9)
+ShA vcc  canh ctrlA 0 swmod
+SlA canl 0    ctrlA 0 swmod
+ShB vcc  canh ctrlB 0 swmod
+SlB canl 0    ctrlB 0 swmod
+
+* ============ bus ============
+Rterm_a canh canl 120
+Rterm_b canh canl 120
+Rbias1  canh vref 10k
+Rbias2  canl vref 10k
+Cbush   canh 0 500p
+Cbusl   canl 0 500p
+Rleak1  canh 0 100meg
+Rleak2  canl 0 100meg
+
+* ============ THE FAULT INJECTOR ============
+* A switch that shorts CANH to CANL through 10 ohm, closing for
+* 60 us (about 7 bit times) every 200 us. Electrically this is a
+* partial short across the differential pair: a realistic wiring
+* fault. While closed the differential voltage collapses and the
+* comparator reads recessive regardless of what any node drives,
+* so a transmitting node sees its dominant bits disappear - a
+* BIT ERROR every time.
+Vfault flt 0 PWL(0 0 119u 0 120u 5)
+Rflt flt 0 1meg
+Sfault canh canl flt 0 fltmod
+.model fltmod SW(Vt=2.5 Vh=0.2 Ron=10 Roff=1e9)
+
+Bdiff vdiff 0 V = V(canh) - V(canl)
+Rdiff vdiff 0 1meg
+Bcomp rx_ana 0 V = 2.5*(1 - tanh(10*(V(canh)-V(canl)-0.7)))
+Rcomp rx_ana 0 1meg
+
+* 6 ms: long enough for TEC to climb past 256 at +8 per bit error
+.tran 200n 6000u
+
+.control
+  run
+
+  echo ""
+  echo "============ FAULT CONFINEMENT ============"
+  echo ""
+  echo "--- did node A go BUS OFF? ---"
+  meas tran boA_max MAX v(boA_a) FROM=10u TO=6000u
+  meas tran boA_when WHEN v(boA_a)=2.5 RISE=1
+  echo ""
+  echo "--- node B is healthy and must NOT go bus off ---"
+  meas tran boB_max MAX v(boB_a) FROM=10u TO=6000u
+  echo ""
+  echo "--- error frames from node A ---"
+  meas tran efA_max MAX v(efA_a) FROM=10u TO=6000u
+  echo ""
+  echo "--- did node A stop transmitting after bus-off? ---"
+  meas tran busy_late MAX v(busyA_a) FROM=5000u TO=6000u
+  echo ""
+  echo "--- bus differential during a fault window ---"
+  meas tran vd_fault FIND v(vdiff) AT=150u
+  meas tran vd_clean FIND v(vdiff) AT=100u
+  echo ""
+  echo "============ EXPECTED ============"
+  echo "  boA_max   = 5 V  node A removed itself from the bus"
+  echo "  boA_when  the moment TEC crossed 256"
+  echo "  boB_max   = 0 V  the healthy node is unaffected"
+  echo "  efA_max   = 5 V  node A signalled errors before giving up"
+  echo "  busy_late = 0 V  a bus-off node must stop transmitting"
+  echo "  vd_fault near 0  the short collapses the differential"
+  echo ""
+.endc
+
+.end

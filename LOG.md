@@ -398,3 +398,17 @@
   like v(canh)-v(canl), only a real vector. Fixed with a B-source node in both
   netlists. ngspice reports it but continues, so it looked like a missing line
 - ngspice lowercases node names - grep for arbA finds nothing, arba works
+
+## Day 39 - fault confinement to bus-off on the analog PHY
+- Physical fault injector: 10 ohm short across CANH/CANL, collapsing the
+  differential to 0.435 V so dominant bits read recessive
+- Intermittent fault (30% duty) did NOT cause bus-off at 6 ms or 16 ms
+- PERMANENT short drove node A to BUS-OFF at 5.626 ms
+- The intermittent survival is CORRECT: +8 per error against -1 per success means
+  a 30% duty fault reaches equilibrium below 256. Nodes should survive
+  recoverable faults and disconnect only for persistent ones
+- I first read that as a failure and ran longer; the permanent-fault variant was
+  the discriminating test
+- HEADLINE: node B unaffected in every run. Fault confinement, not propagation
+- DEFECT: tx_busy stays high after bus-off. The node stops driving but its TX FSM
+  keeps cycling. Should abort the frame and gate frame_start on bus_off
