@@ -418,3 +418,56 @@ modelled). integer, boolean and enumerated types are UNRESOLVED.
 All stimulus driven on the FALLING edge, all sampling on the RISING edge. Both
 failure points I predicted in advance (tx_stall registration timing, the
 payload-bit count) were fine. The delta-cycle discipline worked.
+
+## Day 24 - Bit stuffing ROUND TRIP (vhdl/tb/tb_stuff_rt.vhdl)
+
+Day 23 verified the stuffer and destuffer in ISOLATION, which cannot catch the
+two paths disagreeing. This harness wires them in series:
+
+  payload -> [stuffer] -> stuffed stream -> [destuffer] -> recovered
+
+and asserts recovered = payload bit for bit.
+
+### RESULTS - all 5 patterns recover exactly
+
+| Pattern | Payload | Real stuff bits | Recovered |
+|---|---|---|---|
+| A alternating 0101... | 12 | 0 | 12 exact |
+| B all-dominant | 12 | 2 | 12 exact |
+| C all-recessive | 12 | 2 | 12 exact |
+| D 5 dom / 5 rec / 5 dom | 15 | 2 | 15 exact |
+| E CAN ID 0x0A5 | 11 | 0 | 11 exact |
+
+Pattern B is the decisive one: TWELVE identical bits give TWO stuff bits,
+confirming that a stuffed bit RESETS the run counter to 1 (the stuffed bit is
+itself the first bit of the next run). If the counter did not reset only one
+stuff bit would appear and the destuffer would desynchronise. The isolated
+Day 23 checks could not reach this property.
+
+### MY PREDICTION FOR PATTERN D WAS WRONG
+I predicted 0 stuff bits for 5 dominant / 5 recessive / 5 dominant, reasoning
+that runs of exactly five never reach a sixth identical bit. Wrong: the stuffer
+inserts AFTER five identical bits regardless of what follows - it cannot see
+ahead. Five dominant -> stuff a recessive -> the payload five recessive bits
+then follow that stuffed recessive, making six in a row, so a second stuff bit
+is required. Measured 2. The round trip recovering D exactly proves both sides
+handle this consistently.
+
+### TWO HARNESS BUGS, BOTH ABOUT REGISTERED OUTPUTS
+1. Capture gated only on rising_edge(clk), not on the bit slot. Each slot spans
+   two clock edges, so every bit was captured twice: 12 payload -> 27 captured.
+   Fixed by qualifying capture with the enable.
+2. Capture then taken on the SAME edge as tx_en. tx_bit_out is REGISTERED, so
+   the bit appears one clock later - the capture grabbed the previous slot and
+   the whole stream shifted by one. Diagnostic showed i=0: sent=0 stuffed=1,
+   where 1 is the reset value of tx_out_r. Fixed with a one-clock delayed enable.
+
+The DUT was correct throughout. This is the THIRD consecutive day where the RTL
+was right and my testbench was wrong (Day 22 delta-cycle, Day 23 unresolved
+signal, Day 24 registered-output capture x2). Default hypothesis on a failure
+should now be "the testbench is wrong".
+
+### DRAIN SLOT
+round_trip feeds one extra bit after the payload loop, so stuffed_len is always
+payload + real stuff bits + 1. The reported count now subtracts it. Without that
+correction A and E showed 1 insertion where zero stuffing is possible.

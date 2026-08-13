@@ -145,3 +145,18 @@
 - Falling-edge stimulus / rising-edge sampling worked: both predicted failure
   points came out clean on the first run
 - Removed bt_fix.py and bt_fix2.py from the repo; patch scripts now go to /tmp
+
+## Day 24 - bit stuffing round trip
+- Wired stuffer -> destuffer in series, asserted recovered = payload bit for bit
+- All 5 patterns exact: alternating(0), all-dom(2), all-rec(2), 5/5/5(2), ID(0)
+- Pattern B decisive: 12 identical bits -> 2 stuff bits, proving the run counter
+  resets on a stuffed bit. Isolated Day 23 tests could not reach this
+- My Pattern D prediction of 0 stuff bits was wrong: the stuffer inserts after
+  five identical bits regardless of what follows, so the stuffed recessive plus
+  five payload recessive bits forces a second stuff bit. Measured 2
+- Two harness bugs, both registered-output mistakes: captured every clock instead
+  of every slot (12 -> 27 bits), then captured one cycle too early (whole stream
+  shifted by one, first bit was tx_out_r reset value)
+- THIRD straight day the RTL was correct and my testbench was not. Treating
+  "testbench is wrong" as the default hypothesis from here
+- bit_stuff.vhdl is now FULLY verified - Day 23 checks 3 and 5 are closed
