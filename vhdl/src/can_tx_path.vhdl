@@ -71,6 +71,7 @@ entity can_tx_path is
     bit_slot    : out std_logic;   -- one pulse per bit slot
     sample_now  : out std_logic;   -- one pulse at the sample point
     stuff_now   : out std_logic;   -- high when a stuff bit is on the bus
+    arb_lost    : out std_logic;   -- pulse: lost arbitration
     ack_ok      : out std_logic;   -- pulse: ACK slot was dominant
     ack_err     : out std_logic    -- pulse: nobody acknowledged
   );
@@ -90,6 +91,10 @@ architecture rtl of can_tx_path is
   signal fg_tx_bit   : std_logic;
   signal fg_stuff_en : std_logic;
   signal fg_active   : std_logic;
+  signal fg_arblost  : std_logic;
+  signal fg_in_arb   : std_logic;
+  signal arb_abort_s : std_logic;
+  signal driven_bit  : std_logic;
   signal fg_ack_ok   : std_logic;
   signal fg_ack_err  : std_logic;
   signal fg_field    : std_logic_vector(3 downto 0);
@@ -121,6 +126,22 @@ begin
 
   tx_slot_en <= bit_start and fg_active;
 
+  -- ============ arbitration check ============
+  -- Compare the bit this node ACTUALLY DRIVES on the bus with the
+  -- bit read back. driven_bit is the post-stuffing output, which is
+  -- what physically reaches the wire - comparing frame_gen's
+  -- pre-stuffing payload bit instead produces false losses whenever
+  -- a stuff bit is inserted (Day 30: node A lost against nobody).
+  --
+  -- Sampled at the bit sample point so the bus has settled. At 220 m
+  -- a competing node's dominant bit takes 1.1 us to arrive (Day 17);
+  -- the sample point sits 6 us into the bit precisely to allow that.
+  driven_bit  <= st_bit_out when fg_active = '1' else '1';
+  arb_abort_s <= '1' when (sample_pt = '1' and fg_active = '1'
+                           and fg_in_arb = '1'
+                           and driven_bit = '1' and can_rx = '0')
+                 else '0';
+
   -- ============ bit timing: one pulse per bit slot ============
   u_timing : entity work.bit_timing
     generic map (
@@ -149,11 +170,15 @@ begin
       id_in => id_in, rtr_in => rtr_in,
       dlc_in => dlc_in, data_in => data_in,
       bit_en  => bit_start,
-      bus_bit => can_rx,           -- the actual bus level, for ACK
+      bus_bit   => can_rx,         -- the actual bus level
+      sample_en => sample_pt,
+      arb_abort => arb_abort_s,
       hold    => st_stall_c,       -- <<< back-pressure (combinational)
       tx_bit => fg_tx_bit,
       stuff_en => fg_stuff_en,
       frame_active => fg_active,
+      in_arb   => fg_in_arb,
+      arb_lost => fg_arblost,
       ack_ok  => fg_ack_ok,
       ack_err => fg_ack_err,
       crc_clr => crc_clr, crc_en => crc_en,
@@ -199,6 +224,7 @@ begin
   bit_slot     <= bit_start;
   sample_now   <= sample_pt;
   stuff_now    <= st_stall;
+  arb_lost     <= fg_arblost;
   ack_ok       <= fg_ack_ok;
   ack_err      <= fg_ack_err;
 

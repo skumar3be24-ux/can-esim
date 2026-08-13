@@ -782,3 +782,67 @@ not a pass.
 One transmitter and one receiver only - no arbitration between competing
 transmitters (Day 30+). No error frames on a missing ACK: a real node retransmits
 and eventually increments its error counter. That is Phase 5.
+
+## Day 30 - Arbitration (vhdl/tb/tb_arb.vhdl)
+
+Three nodes start transmitting simultaneously on one wired-AND bus. The node
+with the LOWEST identifier wins; losers detect the loss and release the bus
+without corrupting the winner frame.
+
+  bus = tx_A and tx_B and tx_C     (dominant Z0Z always wins)
+
+### FROZEN IDENTIFIERS, MSB first
+
+            id(10) ............. id(0)
+  A 0x0A5    0 0 0 1 0 1 0 0 1 0 1
+  B 0x123    0 0 1 0 0 1 0 0 0 1 1   differs at id(8)
+  C 0x2AA    0 1 0 1 0 1 0 1 0 1 0   differs at id(9)
+
+  At id(9): A sends 0, C sends 1  -> C loses first
+  At id(8): A sends 0, B sends 1  -> B loses second
+
+### RESULT: 4 of 4 contests correct
+
+| Test | Nodes | Expected | Observed |
+|---|---|---|---|
+| 1 | A alone | nobody loses | lost = 000, A completed |
+| 2 | A vs B | B loses | lost = 010, A completed |
+| 3 | A vs B vs C | B and C lose | lost = 011, A completed |
+| 4 | B vs C (no A) | C loses, B WINS | lost = 001, B completed |
+
+TEST 4 IS THE DISCRIMINATING ONE. Tests 1-3 would all pass if node A simply
+never lost by construction. Removing A forces the logic to pick a winner among
+the remaining nodes on the merits of their identifiers.
+
+### THE BUG - comparing the wrong two signals
+The first implementation put the arbitration check inside frame_gen, comparing
+its internal tx_r against the bus. tx_r is the PRE-STUFFING payload bit; the bus
+carries the POST-STUFFING stream. Whenever the stuffer inserted a dominant stuff
+bit while the payload bit was recessive, the node saw "drove recessive, read
+dominant" and declared a false loss.
+
+Test 1 caught it immediately: node A lost arbitration against an EMPTY BUS,
+which is physically impossible. That isolates "the mechanism fires when it should
+not" from "the mechanism picks the wrong winner" - worth keeping a
+single-node test even though it looks trivial.
+
+STRUCTURAL POINT: arbitration is a property of the WIRE, not of the frame. A node
+must compare what it physically drove against what physically came back.
+frame_gen operates one layer up, in payload bits, and does not have access to the
+right signal because the stuffer sits between it and the bus. The check therefore
+belongs in can_tx_path, which sees both st_bit_out (driven) and can_rx (read
+back). frame_gen now takes an arb_abort input instead.
+
+### TIMING
+The comparison happens at the bit SAMPLE POINT, not at the start of the slot. At
+220 m a competing node dominant bit takes 1.1136 us to arrive (measured Day 17)
+and the sample point sits 6.000 us into the bit precisely to allow for that. This
+is where the Day 17 and Day 20 propagation work pays off: PROP_SEG exists so that
+every node sees every other node bit before the sample instant.
+
+### SIMPLIFICATION TO DECLARE
+All three nodes share one clock and start on the same edge, so they are
+bit-aligned by construction. Real nodes have independent oscillators and
+resynchronise on edges using the Day 22 logic. Testing arbitration with skewed,
+independently-clocked nodes is a separate exercise (Day 71 in the roadmap covers
+the cable-length limit, which is the same phenomenon).

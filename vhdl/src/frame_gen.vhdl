@@ -72,13 +72,28 @@ entity frame_gen is
     -- ---- bit-rate interface ----
     bit_en      : in  std_logic;   -- one pulse per bit slot
     bus_bit     : in  std_logic;   -- what is ACTUALLY on the bus,
-                                   -- sampled in the ACK slot
+                                   -- sampled in the ACK slot and
+                                   -- during arbitration
+    sample_en   : in  std_logic;   -- pulse at the bit sample point
+    arb_abort   : in  std_logic;   -- '1' = arbitration lost, abort
+                                   -- now. Computed OUTSIDE this
+                                   -- module, because the check must
+                                   -- compare the bit actually DRIVEN
+                                   -- on the bus (post-stuffing) with
+                                   -- the bit read back - and this
+                                   -- module only knows the payload
+                                   -- bit before stuffing.
     hold        : in  std_logic;   -- '1' = downstream stuffer sent a
                                    -- stuff bit this slot; do NOT
                                    -- advance, re-offer the same bit
     tx_bit      : out std_logic;   -- the bit to transmit
     stuff_en    : out std_logic;   -- downstream stuffing active
     frame_active: out std_logic;   -- high for the whole frame
+    in_arb      : out std_logic;   -- '1' while in the arbitration
+                                   -- field (SOF, ID, RTR)
+    arb_lost    : out std_logic;   -- pulse: lost arbitration, frame
+                                   -- aborted, this node must become
+                                   -- a receiver
     ack_ok      : out std_logic;   -- pulse: ACK slot was dominant
     ack_err     : out std_logic;   -- pulse: ACK slot stayed recessive
                                    --        - nobody received it
@@ -134,6 +149,7 @@ architecture rtl of frame_gen is
   signal cen_r   : std_logic := '0';
   signal cbit_r  : std_logic := '0';
   signal field_r : std_logic_vector(3 downto 0) := F_IDLE;
+  signal arblost_r : std_logic := '0';
   signal ackok_r : std_logic := '0';
   signal ackerr_r: std_logic := '0';
 
@@ -161,8 +177,9 @@ begin
     elsif rising_edge(clk) then
       cclr_r   <= '0';
       cen_r    <= '0';
-      ackok_r  <= '0';
-      ackerr_r <= '0';
+      ackok_r   <= '0';
+      ackerr_r  <= '0';
+      arblost_r <= '0';
 
       if state = ST_IDLE then
         tx_r    <= '1';           -- bus idle is recessive
@@ -189,6 +206,28 @@ begin
           bitcnt <= 0;
           act_r  <= '1';
         end if;
+
+      elsif arb_abort = '1' and act_r = '1' then
+        -- ================= ARBITRATION LOST =================
+        -- We are transmitting recessive but the bus is dominant, so
+        -- another node with a lower identifier is transmitting.
+        -- Abort immediately and release the bus. The winner carries
+        -- on without ever knowing there was a contest.
+        --
+        -- The converse cannot occur: a node transmitting dominant
+        -- always reads dominant, because the bus is wired-AND.
+        --
+        -- Checked at the SAMPLE POINT, not at the start of the slot,
+        -- so bus_bit has settled - at 220 m the far node's bit takes
+        -- 1.1 us to arrive (Day 17) and the sample point sits 6 us
+        -- into the bit precisely to allow for that.
+        arblost_r <= '1';
+        tx_r      <= '1';        -- release the bus to recessive
+        act_r     <= '0';
+        stuff_r   <= '0';
+        state     <= ST_IDLE;
+        field_r   <= F_IDLE;
+        bitcnt    <= 0;
 
       elsif bit_en = '1' and hold = '0' then
         -- ============ one bit slot ============
@@ -367,6 +406,10 @@ begin
   crc_en       <= cen_r;
   crc_bit      <= cbit_r;
   field_id     <= field_r;
+  -- combinational: true while the arbitration field is on the bus
+  in_arb       <= '1' when (state = ST_SOF or state = ST_ID
+                            or state = ST_RTR) else '0';
+  arb_lost     <= arblost_r;
   ack_ok       <= ackok_r;
   ack_err      <= ackerr_r;
 

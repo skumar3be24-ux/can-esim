@@ -244,3 +244,21 @@
   not a pass
 - run.sh needs a matching src module, so integration testbenches (tb_probe,
   tb_stuff_rt, tb_ack) are run via ghdl directly. Worth a run_tb.sh eventually
+
+## Day 30 - arbitration
+- Three nodes contending on a wired-AND bus; lowest identifier wins
+- 4 of 4 contests correct: A alone, A vs B, A vs B vs C, and B vs C with A absent
+- Test 4 (B vs C) is the discriminating one - proves the winner comes from the
+  identifiers present, not from node A never losing by construction
+- BUG: the check was inside frame_gen comparing the PRE-STUFFING payload bit
+  against the POST-STUFFING bus, so an inserted stuff bit looked like a lost
+  arbitration. Node A lost against an empty bus
+- Arbitration is a property of the WIRE: compare what was physically driven
+  against what came back. Moved the check to can_tx_path, which sees both;
+  frame_gen now takes an arb_abort input
+- Test 1 (single node) caught it instantly - keep trivial-looking tests, they
+  separate "fires when it should not" from "picks the wrong winner"
+- Comparison happens at the sample point, which is why PROP_SEG exists: at 220 m
+  a competing dominant bit needs 1.11 us to arrive (Day 17)
+- SIMPLIFICATION: nodes share a clock and start aligned. Independent oscillators
+  with resync is a separate test
