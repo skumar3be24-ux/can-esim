@@ -1,0 +1,81 @@
+* CAN differential physical layer - eSim subcircuit
+* ============================================================
+* The complete analog CAN transceiver and bus, packaged as a
+* single schematic symbol.
+*
+* Everything here was characterised and frozen in Days 13-21 of
+* development; see docs/phy_spec.md. The values are measurements,
+* not guesses:
+*
+*   R_on 45 ohm      derived from 1.5 V across 33.333 mA
+*   120 ohm x 2      ISO 11898-2 termination, 60 ohm differential
+*   dominant Vdiff   2.0 V nominal, 1.996 V measured
+*   recessive Vdiff  0 V, both rails biased to 2.5 V
+*   comparator       centred at 0.7 V, midway between the 0.5 V
+*                    recessive and 0.9 V dominant thresholds
+*
+* WHY A SUBCIRCUIT
+*   The driver stages need voltage-controlled switches and the
+*   receiver needs a behavioural (B) source for the tanh
+*   comparator. Neither has a KiCad schematic symbol in eSim, but
+*   a subcircuit may contain any ngspice syntax - so the whole
+*   transceiver becomes one placeable part.
+*
+* PORTS
+*   txa  txb   digital transmit levels in, 0 V or 5 V
+*              (dominant is 0 V, matching CAN polarity)
+*   rxo        receiver output, 0 V dominant / 5 V recessive
+*   vcc        5 V supply
+*   gnd        ground
+*
+* WIRED-AND
+*   Both driver stages sit across the SAME differential pair, so
+*   either node alone pulls the bus dominant. This is physical,
+*   not logical: it is what makes CAN arbitration non-destructive.
+* ============================================================
+
+.subckt can_phy txa txb rxo vcc gnd
+
+* ---- invert: CAN dominant is logic 0, but the switch model
+* ---- closes on a HIGH control voltage
+Bda ctla gnd V = 5 - V(txa,gnd)
+Bdb ctlb gnd V = 5 - V(txb,gnd)
+Rca ctla gnd 1meg
+Rcb ctlb gnd 1meg
+
+.model swmod SW(Vt=2.5 Vh=0.2 Ron=45 Roff=1e9)
+
+* ---- node A driver stage ----
+Sha vcc  canh ctla gnd swmod
+Sla canl gnd  ctla gnd swmod
+
+* ---- node B driver stage, same pair ----
+Shb vcc  canh ctlb gnd swmod
+Slb canl gnd  ctlb gnd swmod
+
+* ---- termination, both ends of the bus ----
+Rta canh canl 120
+Rtb canh canl 120
+
+* ---- bias network holds the recessive level at 2.5 V ----
+Vref vref gnd DC 2.5
+Rb1 canh vref 10k
+Rb2 canl vref 10k
+
+* ---- bus capacitance ----
+Cbh canh gnd 500p
+Cbl canl gnd 500p
+
+* ---- leakage: 100 Mohm, NOT 1 Mohm. At 1 Mohm these form a
+* ---- divider with the 10 k bias and the recessive level sits at
+* ---- 2.4752 V instead of 2.500 V (found on Day 13)
+Rlh canh gnd 100meg
+Rll canl gnd 100meg
+
+* ---- differential receiver ----
+* centred at 0.7 V, gain 10 gives a transition width of about
+* +/- 0.2 V. Output is inverted: dominant bus -> 0 V out
+Bcmp rxo gnd V = 2.5*(1 - tanh(10*(V(canh,gnd)-V(canl,gnd)-0.7)))
+Rcmp rxo gnd 1meg
+
+.ends can_phy
