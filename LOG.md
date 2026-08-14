@@ -524,3 +524,10 @@
   differential 0 V recessive / 2 V dominant, receiver output tracking cleanly
 - Three figures generated with matplotlib from the ngspice ASCII raw file,
   satisfying the "Python plots" requirement in the FOSSEE guidelines
+
+## Day 42 (final) - schematic wired, package rebuilt
+- Added 66 stub wires so every pin reads as connected in the conventional
+  pin-wire-label style. Netlist verified IDENTICAL after the change, so the
+  wires are purely cosmetic and the simulation is unaffected
+- Re-plotted the schematic and rebuilt the abstract PDF with the wired version
+- Project rezipped for submission
