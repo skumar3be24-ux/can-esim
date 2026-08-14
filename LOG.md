@@ -512,3 +512,15 @@
   (can_phy/can_phy.sub), matching the SubcircuitLibrary layout
 - print allv only captures analog nodes; digital event nodes need dac_bridges
   or the ASCII raw file
+
+## Day 42 (cont) - waveform evidence
+- docs/waveforms/can_bus_frame.png shows the complete frame with the arbitration
+  visible in the analog domain:
+    differential 2.85 V from ~26 to ~55 us = BOTH nodes driving dominant
+      (two 45 ohm drivers in parallel = 22.5 ohm)
+    differential 2.00 V thereafter = one node alone, node B has withdrawn
+  So the moment arbitration resolves is directly readable off the bus voltage
+- Bus levels match ISO 11898-2: CANH 2.5 to 3.5 V, CANL 2.5 to 1.5 V,
+  differential 0 V recessive / 2 V dominant, receiver output tracking cleanly
+- Three figures generated with matplotlib from the ngspice ASCII raw file,
+  satisfying the "Python plots" requirement in the FOSSEE guidelines
