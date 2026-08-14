@@ -2,13 +2,13 @@
 U4 /CLK /RST /RX /REQ /SEL_LO /SEL_HI /TXB_D /BUSY_B /DONE_B /ARB_B /RXV_B /ERRF_B /BOFF_B can_node_top
 U3 /CLK /RST /RX /REQ /SEL_LO /SEL_LO /TXA_D /BUSY_A /DONE_A /ARB_A /RXV_A /ERRF_A /BOFF_A can_node_top
 U5 /TXA_D /TXB_D /TXA_A /TXB_A dac_bridge_2
-X1 /TXA_A /TXB_A /RX_A /VCC5 GND can_phy
-v5 /SEL_LO_A GND DC
-v6 /SEL_HI_A GND DC
-v4 /VCC5 GND DC
-v3 GND GND pulse
 v2 /RST_A GND pulse
 v1 /CLK_A GND pulse
-U2 /CLK_A /RST_A GND /RX_A /CLK /RST /REQ /RX adc_bridge_4
+v3 /REQ_A GND pulse
 U1 /SEL_LO_A /SEL_HI_A /SEL_LO /SEL_HI adc_bridge_2
+U2 /CLK_A /RST_A /REQ_A /RX_A /CLK /RST /REQ /RX adc_bridge_4
+v4 /VCC5 GND DC
+v5 /SEL_LO_A GND DC
+X1 /TXA_A /TXB_A /RX_A /VCC5 GND can_phy
+v6 /SEL_HI_A GND DC
 .end

@@ -531,3 +531,18 @@
   wires are purely cosmetic and the simulation is unaffected
 - Re-plotted the schematic and rebuilt the abstract PDF with the wired version
 - Project rezipped for submission
+
+## Day 42 (final) - schematic fully wired
+- Replaced the label-only connections with 69 real wire segments and 6 junctions:
+  sources into the bridges, bridge outputs branching to both nodes, node outputs
+  into the DAC bridge, driver to the transceiver, comparator feedback routed
+  above the sheet. Ground stays as symbols, which is correct practice
+- Netlist verified identical after wiring - all nine component lines intact,
+  including v3 /REQ_A GND pulse which a previous attempt had shorted
+- FAILED ATTEMPT worth recording: the first approach drew short stubs from each
+  pin to its label. On vertically stacked sources the stubs met exactly halfway
+  (v1 pin2 down 5.08mm and v2 pin1 up 5.08mm land on the same point), shorting
+  GND to REQ_A. The fix was point-to-point routes that only ever END on their
+  intended pin - crossings are harmless in KiCad, only junctions connect
+- Simulation re-run after wiring: unchanged, 19460 socket exchanges
+- Schematic re-plotted, abstract rebuilt, project rezipped
