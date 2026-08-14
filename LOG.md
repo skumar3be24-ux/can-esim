@@ -490,3 +490,25 @@
   positions are cosmetic but numbers determine netlist net order
 - All infrastructure for the schematic now exists: can_node_top symbol, can_phy
   symbol, verified can_phy.sub, and the attachment mechanism
+
+## Day 42 (cont) - eSIM PROJECT SIMULATING
+- Full eSim flow works end to end: schematic -> Spice netlist -> Ki2Ng ->
+  ngspice with NGHDL models and the can_phy subcircuit
+- Measured from the eSim-generated netlist:
+    reset releases 2.00 us, request fires 10.01 us
+    node identities set (sel_lo 0 V, sel_hi 5 V)
+    both nodes drive the bus, differential max 2.85 V
+    first dominant at 26.51 us
+- The 2.85 V differential (vs 1.996 V hand-written) is CORRECT: during
+  arbitration both nodes drive dominant at once, so two 45 ohm drivers in
+  parallel = 22.5 ohm and the rails are pulled harder. Direct evidence of
+  genuine contention
+- KEY FINDING: eSim reads the LEGACY Spice-format netlist export, not the
+  KiCad S-expression format. Choosing the obvious "KiCad" tab in eeschema
+  produces a file it silently cannot parse - empty Source Details, no error
+- eSim also double-applies the unit suffix in the Analysis tab: entering
+  100e-9 with unit "sec" emits ".tran 100e-9e-00" which ngspice rejects
+- Subcircuits must live in a directory NAMED after the subcircuit
+  (can_phy/can_phy.sub), matching the SubcircuitLibrary layout
+- print allv only captures analog nodes; digital event nodes need dac_bridges
+  or the ASCII raw file
