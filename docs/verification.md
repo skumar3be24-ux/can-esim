@@ -155,6 +155,23 @@ Netlists in `spice/`. NGHDL models built from `nghdl_model/`.
 | M11 | **Fault confinement** | **healthy node unaffected in every run** | ✅ |
 | M12 | Bus-off suppression | `tx_busy` → 0 after bus-off | ✅ |
 
+### Oscillator skew (Day 43)
+
+Node A at 2.000 MHz nominal; node B scaled by the swept skew. Node B's quantum
+verified to change: 500.0, 501.0, 502.5, 504.9, 507.5, 510.0, 515.0, 520.0,
+525.0, 530.0 ns.
+
+| # | Skew | Reception | Errors | Status |
+|---|---|---|---|---|
+| S1 | 0.00 – 0.98% | correct | none | ✅ meets the derived tolerance |
+| S2 | 1.50 – 3.00% | correct | none | ✅ 3× margin over the bound |
+| S3 | 4.00 – 6.00% | fails | detected | ✅ **fails safely** |
+
+The threshold lies between 3.0% and 4.0%. The derived 0.98% figure is a
+worst-case bound assuming the longest legal run without an edge; this frame has
+frequent transitions so it resynchronises more often and tolerates more. Above
+the threshold the node rejects the frame rather than accepting corrupt data.
+
 **M7 is the strongest arbitration evidence in the project.** The loss order was
 derived from the identifier bit patterns *before* measurement, and the losses
 land exactly one bit time (8 µs) apart, matching D at id(10), C at id(9), B at
@@ -178,14 +195,14 @@ Stated explicitly rather than omitted:
 | Automatic retransmission after arbitration loss | ❌ node abandons the frame |
 | `rx_err_big` (+8 receive) in integration | ❌ see E6 |
 | Bit errors during CRC/ACK delimiter | ⚠️ suppressed to avoid false positives |
-| Independent oscillators between nodes | ❌ all nodes share a clock |
+| Independent oscillators between nodes | ✅ verified, 0-6% skew sweep (S1-S3) |
 | REC 119–127 band on reception above 127 | ⚠️ implemented as 127, untested |
 | Transceiver common-mode input range | ❌ model has none; real parts saturate |
 | Bus faults: open, short to VCC/GND, single-wire | ❌ only the differential short |
 
-The oscillator-independence gap is the most significant: real nodes resynchronise
-using the Day 22 logic, which is implemented and unit-tested but never exercised
-against genuinely skewed clocks.
+The oscillator-independence gap was closed on Day 43. Resynchronisation is now
+verified in the system across a 0 to 6 per cent skew sweep, with node B's time
+quantum confirmed to genuinely change. See S1-S3 below.
 
 ---
 
