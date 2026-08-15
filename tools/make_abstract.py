@@ -5,7 +5,11 @@ from reportlab.lib import colors
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
                                 Table, TableStyle, Image, PageBreak)
 
-F = '/sessions/laughing-gifted-mendel/mnt/FOSSEE/figs/'
+import os
+# figures live in docs/figs, resolved relative to this script so the
+# generator works from any checkout rather than one machine's paths
+F = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                 '..', 'docs', 'figs') + os.sep
 doc = SimpleDocTemplate("CAN_Bus_MixedSignal_Abstract.pdf", pagesize=A4,
                         leftMargin=22*mm, rightMargin=22*mm,
                         topMargin=20*mm, bottomMargin=18*mm)

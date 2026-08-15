@@ -16,7 +16,7 @@ Remaining work is presentation, not engineering.
 
 ---
 
-## Current state (end of Day 40)
+## Current state (end of Day 43, submission-ready)
 
 ### Working and verified
 
@@ -116,8 +116,11 @@ Listed in full in `docs/verification.md`. The significant ones:
 - **No extended (29-bit) identifiers** — standard format only
 - **No automatic retransmission** after losing arbitration — the node abandons
   the frame rather than retrying
-- **All nodes share a clock** — resynchronisation logic is implemented and
-  unit-tested but never exercised against genuinely skewed oscillators
+- **The eSim netlist drives both nodes from one clock.** Resynchronisation
+  itself is no longer an untested gap: `tb_skew` sweeps node B from 0 to 6 per
+  cent oscillator skew against node A and reception stays correct to 3 per
+  cent, three times the derived 0.98 per cent bound. Above the threshold the
+  receiver flags an error rather than accepting corrupt data
 - **No overload frames**
 - **Bit errors during the CRC/ACK delimiter are suppressed** to avoid false
   positives from a registered-signal lag; a precise fix would register the field
@@ -144,6 +147,13 @@ Worth keeping if this is picked up again:
   against what the model already produces.
 - **Check a measurement can distinguish pass from fail.** Two measurements in
   this project returned identical values for the working and broken cases.
+
+---
+
+## Rebuilding from scratch
+
+See `docs/REBUILD.md` — fresh Ubuntu to running mixed-signal simulation,
+including the five eSim/NGHDL defects that must be patched first.
 
 ---
 
