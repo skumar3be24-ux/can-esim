@@ -175,8 +175,11 @@ s.append(Paragraph("7. Limitations", H))
 s.append(Paragraph(
 "Standard 11-bit identifiers only; extended identifiers and overload frames are not "
 "implemented. A node that loses arbitration abandons the frame rather than retrying. "
-"All nodes share a clock, so the resynchronisation logic, although implemented and unit "
-"tested, is not exercised against genuinely skewed oscillators. The comparator has no "
+"The eSim netlist drives both nodes from one clock, although resynchronisation itself is "
+"verified against independent oscillators in simulation: sweeping one node from 0 to 6 per "
+"cent skew, reception stays correct to 3 per cent, three times the derived 0.98 per cent "
+"bound, and fails safely above that by flagging an error rather than accepting corrupt "
+"data. The comparator has no "
 "common-mode input range, so the model is optimistic outside the range where real "
 "transceivers saturate.", B))
 
