@@ -546,3 +546,49 @@
   intended pin - crossings are harmless in KiCad, only junctions connect
 - Simulation re-run after wiring: unchanged, 19460 socket exchanges
 - Schematic re-plotted, abstract rebuilt, project rezipped
+
+## Day 43 - Oscillator skew: closing the synchronisation gap
+
+Every node until now shared a clock, so the resynchronisation logic built on
+Day 22 had never actually corrected anything. It was implemented and
+unit-tested but unverified in the system. This closes that gap.
+
+### METHOD
+Node A at 2.000 MHz nominal, node B at 2.000 MHz scaled by a swept skew.
+Node A transmits, node B must receive and acknowledge. Node B quantum verified
+to genuinely change: 500.0, 501.0, 502.5, 504.9, 507.5, 515.0, 530.0 ns.
+
+### RESULT
+
+| Skew | Node B quantum | Reception | Errors |
+|---|---|---|---|
+| 0.00% | 500.0 ns | correct | none |
+| 0.20% | 501.0 ns | correct | none |
+| 0.50% | 502.5 ns | correct | none |
+| 0.98% | 504.9 ns | correct | none |
+| 1.50% | 507.5 ns | correct | none |
+| 2.00% | 510.0 ns | correct | none |
+| 3.00% | 515.0 ns | correct | none |
+| 4.00% | 520.0 ns | FAILS | detected |
+| 5.00% | 525.0 ns | FAILS | detected |
+| 6.00% | 530.0 ns | FAILS | detected |
+
+Threshold lies between 3.0% and 4.0%.
+
+### INTERPRETATION
+1. Resynchronisation works in the system, not only in isolation. This was the
+   most significant verification gap in the project and it is now closed.
+2. The derived 0.98% tolerance holds with roughly 3x margin. That is expected:
+   the CAN formula is a WORST-CASE bound assuming the longest legal run without
+   an edge (10 bit times). The test frame has frequent transitions so it
+   resynchronises far more often and tolerates more. The margin confirms the
+   derivation is conservative rather than wrong.
+3. FAILURE IS SAFE. At 4% and beyond the node does not silently accept corrupt
+   data - reception fails and errors are raised. A desynchronised node rejects
+   the frame rather than passing garbage upward. This is arguably the most
+   valuable part of the result.
+
+### NOTE ON THE WORST CASE
+To probe the true worst case a frame with maximum stuffing would be needed, so
+that edges are spaced the full six bits apart. The 0.98% figure remains the
+number to quote for design purposes; 3% is what this particular frame achieves.

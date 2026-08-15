@@ -120,7 +120,11 @@ begin
       frame_start => frame_start,
       id_in => id_in, rtr_in => rtr_in,
       dlc_in => dlc_in, data_in => data_in,
-      can_rx => bus_level, can_tx => tx_out,
+      can_rx => bus_level,
+      -- ports added on Days 36 and 40, after this Day 29 harness was written
+      in_ack_slot => '0',
+      abort_in    => '0',
+      bit_err     => open, can_tx => tx_out,
       frame_active => frame_active,
       field_id => field_id,
       bit_slot => bit_slot,

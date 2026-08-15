@@ -96,6 +96,10 @@ begin
         dlc_in  => "0001",
         data_in => (others => '0'),
         can_rx  => bus_level,
+        -- ports added on Days 36 and 40, after this Day 30 harness was written
+        in_ack_slot => '0',
+        abort_in    => '0',
+        bit_err     => open,
         can_tx  => tx_out(n),
         frame_active => frame_act(n),
         field_id => fid(n),

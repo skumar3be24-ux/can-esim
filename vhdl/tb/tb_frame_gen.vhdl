@@ -72,11 +72,24 @@ begin
       frame_start => frame_start,
       id_in => id_in, rtr_in => rtr_in,
       dlc_in => dlc_in, data_in => data_in,
-      bit_en => bit_en, tx_bit => tx_bit,
+      bit_en => bit_en,
+      -- inputs added after this testbench was written (Days 27-40).
+      -- Tied off to reproduce the Day 26 conditions: no stuffer
+      -- back-pressure, no arbitration abort, no sample events, bus
+      -- recessive.
+      hold      => '0',
+      bus_bit   => '1',
+      sample_en => '0',
+      arb_abort => '0',
+      in_arb    => open,
+      tx_bit => tx_bit,
       stuff_en => stuff_en, frame_active => frame_active,
       crc_clr => crc_clr, crc_en => crc_en,
       crc_bit => crc_bit, crc_val => crc_val,
-      field_id => field_id
+      field_id => field_id,
+      arb_lost => open,
+      ack_ok   => open,
+      ack_err  => open
     );
 
   crc : entity work.crc15

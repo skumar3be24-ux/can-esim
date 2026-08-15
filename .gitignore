@@ -9,9 +9,11 @@ vhdl/**/tb_[!.]*
 *.vcd
 *.ghw
 
-# ngspice output
+# ngspice output (but NOT .cir.out - that is a required
+# eSim submission file)
 *.raw
-*.out
+spice/*.out
+!*.cir.out
 
 # eSim / KiCad generated
 *-cache.lib
