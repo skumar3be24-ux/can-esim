@@ -200,9 +200,11 @@ begin
         nfail := nfail + 1;
       end if;
 
+      report "  node B quantum = " & time'image(tq_b)
+           & "  (nominal " & time'image(TQ_NOM) & ")" severity note;
       report "skew " & integer'image(skew_ppm) & " ppm ("
-           & integer'image(skew_ppm / 100) & "."
-           & integer'image((skew_ppm mod 100) / 10)
+           & integer'image(skew_ppm / 10000) & "."
+           & integer'image((skew_ppm mod 10000) / 100)
            & "%) : received=" & std_logic'image(saw_rxb)
            & " id_ok=" & boolean'image(cap_id = TX_ID)
            & " data_ok=" & boolean'image(cap_data = TX_DATA)
@@ -229,7 +231,10 @@ begin
     -- beyond the derived limit: recorded, not asserted, because
     -- the exact failure point depends on frame content
     run_one(15000, true);      -- 1.50%
-    run_one(30000, false);     -- 3.00%
+    run_one(20000, true);      -- 2.00%
+    run_one(30000, true);      -- 3.00%
+    run_one(40000, false);     -- 4.00%  threshold lies here
+    run_one(50000, false);     -- 5.00%
     run_one(60000, false);     -- 6.00%
 
     report "" severity note;
