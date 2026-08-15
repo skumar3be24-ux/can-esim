@@ -87,6 +87,7 @@ values.
 | Sample point | 75.00% (tq 12) |
 | SJW | 4 tq |
 | Oscillator tolerance (derived) | 0.98% |
+| Oscillator tolerance (measured) | correct to 3%, fails safely above 4% |
 | Max bus length (derived) | 220 m |
 | Dominant levels | CANH 3.5 V, CANL 1.5 V, Vdiff 2.0 V |
 | Recessive levels | both 2.5 V, Vdiff 0 V |
@@ -108,10 +109,12 @@ docs/            phy_spec.md      frozen parameters + model limitations
                  measurements.md  full day-by-day results
                  roadmap.md       the original 86-day plan
                  handoff.md       context for resuming work
+                 REBUILD.md       fresh machine to running simulation
+                 figs/            figures used by the abstract
                  schematics/      eSim schematic export
                  waveforms/       simulation figures
 vhdl/src         10 design modules
-vhdl/tb          self-checking testbenches
+vhdl/tb          20 self-checking testbenches
 vhdl/scripts     run.sh
 spice/           analog PHY netlists + mixed-signal simulations
                  run_phy_regression.sh  18-check PHY regression
@@ -242,8 +245,11 @@ Stated explicitly rather than omitted. Full list in `docs/verification.md`:
 
 - Standard 11-bit identifiers only; no extended identifiers, no overload frames
 - A node that loses arbitration abandons the frame rather than retrying
-- All nodes share a clock, so resynchronisation is implemented and unit-tested
-  but not exercised against genuinely skewed oscillators
+- The eSim netlist drives both nodes from one clock. Resynchronisation itself is
+  verified against independent oscillators in `tb_skew`, which sweeps node B
+  from 0 to 6% skew: reception stays correct to 3%, three times the derived
+  0.98% bound, and fails safely above it by flagging an error rather than
+  accepting corrupt data
 - The comparator has no common-mode input range, so the model is optimistic
   outside the range where real transceivers saturate
 - The simulated transceiver is 21.6 ns where real parts are 100–255 ns; all
