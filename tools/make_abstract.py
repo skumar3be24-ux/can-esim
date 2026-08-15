@@ -119,7 +119,7 @@ s.append(Paragraph(
 s.append(PageBreak())
 s.append(Paragraph("5. Results", H))
 s.append(Image(F+'can_bus_frame.png', width=160*mm, height=128*mm))
-s.append(Paragraph("Figure 2. Complete frame. CANH and CANL (top), differential with the "
+s.append(Paragraph("Figure 2. Python plot. Complete frame: CANH and CANL (top), differential with the "
 "ISO thresholds marked (middle), receiver output (bottom).", CAP))
 s.append(Paragraph(
 "The bus levels match ISO 11898-2: CANH moves from 2.5 V to 3.5 V, CANL from 2.5 V to "
@@ -135,10 +135,10 @@ s.append(Paragraph(
 
 s.append(PageBreak())
 s.append(Image(F+'can_arbitration.png', width=160*mm, height=88*mm))
-s.append(Paragraph("Figure 3. Arbitration field. Both nodes drive the bus; the elevated "
+s.append(Paragraph("Figure 3. Python plot. Arbitration field: both nodes drive the bus; the elevated "
 "differential indicates simultaneous dominant drive.", CAP))
 s.append(Image(F+'can_control.png', width=160*mm, height=51*mm))
-s.append(Paragraph("Figure 4. Control signals. Reset released at 2 us, transmit request "
+s.append(Paragraph("Figure 4. Python plot. Control signals: reset released at 2 us, transmit request "
 "asserted at 10 us.", CAP))
 s.append(Paragraph(
 "Figures 2 to 4 are plotted in Python from the exported raw data. Figures 5 and 6 are "
@@ -176,7 +176,19 @@ s.append(Paragraph(
 "common-mode input range, so the model is optimistic outside the range where real "
 "transceivers saturate.", B))
 
-s.append(Paragraph("8. References", H))
+s.append(Paragraph("8. Conclusion", H))
+s.append(Paragraph(
+"A two-node CAN bus was modelled in eSim as a mixed-signal system and its operation "
+"verified. The bus levels match ISO 11898-2, a complete frame transfers from "
+"transmitter to receiver, and arbitration, acknowledgement and error signalling were "
+"each confirmed against a reference model written independently of the RTL. Bit timing "
+"holds against oscillator skew up to 3 per cent, three times the derived tolerance, and "
+"fails safely beyond it by flagging an error rather than accepting corrupt data. The "
+"analog and digital halves were verified together rather than separately, which is what "
+"CAN requires: arbitration and acknowledgement are only meaningful when the wired-AND "
+"behaviour of the physical bus is genuinely present.", B))
+
+s.append(Paragraph("9. References", H))
 s.append(Paragraph(
 "ISO 11898-1:2015, Road vehicles - Controller area network (CAN) - Part 1: Data link "
 "layer and physical signalling.<br/>"
