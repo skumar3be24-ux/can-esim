@@ -200,9 +200,23 @@ s.append(Paragraph(
 s.append(Paragraph("9. References", H))
 s.append(Paragraph(
 "ISO 11898-1:2015, Road vehicles - Controller area network (CAN) - Part 1: Data link "
-"layer and physical signalling.<br/>"
-"ISO 11898-2:2016, Part 2: High-speed medium access unit.<br/>"
-"Bosch CAN Specification Version 2.0, Robert Bosch GmbH, 1991.", B))
+"layer and physical signalling. "
+'<link href="https://www.iso.org/standard/63648.html">'
+'<font color="blue">https://www.iso.org/standard/63648.html</font></link><br/>'
+"ISO 11898-2:2016, Road vehicles - Controller area network (CAN) - Part 2: "
+"High-speed medium access unit. "
+'<link href="https://www.iso.org/standard/67244.html">'
+'<font color="blue">https://www.iso.org/standard/67244.html</font></link><br/>'
+"Bosch CAN Specification Version 2.0, Robert Bosch GmbH, 1991.<br/>"
+"FOSSEE, IIT Bombay. eSim: an open source EDA tool. "
+'<link href="https://esim.fossee.in">'
+'<font color="blue">https://esim.fossee.in</font></link><br/>'
+"T. Gingold. GHDL, a VHDL simulator. "
+'<link href="https://ghdl.github.io/ghdl/">'
+'<font color="blue">https://ghdl.github.io/ghdl/</font></link><br/>'
+"Ngspice, mixed-level/mixed-signal circuit simulator. "
+'<link href="https://ngspice.sourceforge.io">'
+'<font color="blue">https://ngspice.sourceforge.io</font></link>', B))
 
 doc.build(s)
 print("built")
