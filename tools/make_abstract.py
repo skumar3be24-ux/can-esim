@@ -122,6 +122,7 @@ s.append(Paragraph(
 
 s.append(PageBreak())
 s.append(Paragraph("5. Results", H))
+s.append(Paragraph("5.1 Python plots", H))
 s.append(Image(F+'can_bus_frame.png', width=160*mm, height=128*mm))
 s.append(Paragraph("Figure 2. Python plot. Complete frame: CANH and CANL (top), differential with the "
 "ISO thresholds marked (middle), receiver output (bottom).", CAP))
@@ -149,6 +150,7 @@ s.append(Paragraph(
 "produced by Ngspice itself, from the same run, using the hardcopy command on the "
 "loaded raw file. They are included so the results can be seen in the simulator's own "
 "output as well as in post-processing.", B))
+s.append(Paragraph("5.2 Ngspice plots", H))
 s.append(Image(F+'ngspice_bus.png', width=150*mm, height=112*mm))
 s.append(Paragraph("Figure 5. Ngspice plot of CANH and CANL. Both lines rest at 2.5 V "
 "recessive and separate to 3.5 V and 1.5 V dominant. The wider excursions are the "
