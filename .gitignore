@@ -30,3 +30,12 @@ client.log
 vhdl/*_vectors.txt
 vhdl/*.vcd
 vhdl/work-obj93.cf
+
+# Personal documents - never commit these. The signed internship
+# forms contain a home address, phone number, photograph and
+# signature. They live outside this repository by design.
+*_Sourabh_Kumar.pdf
+signature*.png
+photo*.png
+*Applicantform*
+*copyright*.pdf

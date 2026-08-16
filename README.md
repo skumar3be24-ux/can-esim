@@ -6,6 +6,10 @@ tools.
 
 **FOSSEE eSim Semester Long Internship, Autumn 2026 — Task 2**
 
+**Submitted 16 August 2026.** Project files and abstract uploaded through the
+eSim Circuit Simulation Project interface; proposal approved 14 August 2026.
+Results announced 2 September 2026.
+
 ---
 
 ## What this is
@@ -98,6 +102,20 @@ values.
 
 Frozen in `docs/phy_spec.md`, with an 18-check regression script that verifies
 every one of them.
+
+---
+
+## Where to start
+
+| If you want to | Read |
+|---|---|
+| Rebuild this from a bare machine | [`docs/REBUILD.md`](docs/REBUILD.md) |
+| Understand the design in full | [`docs/CAN_Project_Technical_Report.pdf`](docs/CAN_Project_Technical_Report.pdf) (30 pages) |
+| See the submitted summary | [`docs/CAN_Bus_MixedSignal_Abstract.pdf`](docs/CAN_Bus_MixedSignal_Abstract.pdf) |
+| Check what was tested and how | [`docs/verification.md`](docs/verification.md) |
+| See the frozen analog parameters | [`docs/phy_spec.md`](docs/phy_spec.md) |
+| Pick the work up where it stopped | [`docs/handoff.md`](docs/handoff.md) |
+| Follow the day-by-day record | [`LOG.md`](LOG.md) |
 
 ---
 
