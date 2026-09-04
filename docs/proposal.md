@@ -1,9 +1,4 @@
-# FOSSEE eSim — Circuit Simulation Proposal
-
-**Paste the relevant sections into the proposal form at**
-https://esim.fossee.in/circuit-simulation-project/proposal
-
-You will need an account on esim.fossee.in first (create one if you don't have it).
+# Project Overview
 
 ---
 
@@ -61,8 +56,8 @@ fault-confinement rules.
 
 ## Why this is not a trivial simulation
 
-The FOSSEE procedure notes that simple simulations with one or two components will
-not be accepted. This design comprises:
+A minimal one- or two-component simulation would not exercise the interesting
+part of the protocol. This design comprises:
 
 - Analog: differential driver stages, dual termination, bias network, bus
   capacitance, differential receiver, transmission-line model
@@ -102,7 +97,7 @@ not be accepted. This design comprises:
 
 ---
 
-## Note to the reviewers
+## Note on toolchain defects found along the way
 
 During development, six defects were found in eSim 2.5 and NGHDL, each diagnosed
 and patched. The most significant is that NGHDL's generated build script analyses

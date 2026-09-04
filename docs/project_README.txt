@@ -3,7 +3,6 @@ CAN Bus - Mixed-Signal Modelling and Verification in eSim
 
 Sourabh Kumar
 Thapar Institute of Engineering and Technology
-FOSSEE eSim Circuit Simulation Project
 
 
 WHAT THIS IS

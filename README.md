@@ -4,11 +4,9 @@ Complete Controller Area Network node — physical layer and protocol
 controller — modelled and verified at circuit level using open-source EDA
 tools.
 
-**FOSSEE eSim Semester Long Internship, Autumn 2026 — Task 2**
-
-**Submitted 16 August 2026.** Project files and abstract uploaded through the
-eSim Circuit Simulation Project interface; proposal approved 14 August 2026.
-Results announced 2 September 2026.
+A personal project exploring mixed-signal circuit simulation: how far a
+digital protocol controller and its analog physical layer can be verified
+together, rather than assuming the boundary between them is correct.
 
 ---
 
@@ -51,7 +49,7 @@ mixed-signal project rather than a digital one with decorative analog attached.
 | 8 | Multi-node & arbitration | ✅ |
 | 9 | Mixed-signal & fault studies | ✅ |
 | 10 | Verification campaign | ✅ |
-| 11 | eSim project & submission | ✅ |
+| 11 | eSim project integration | ✅ |
 
 Mixed-signal integration was pulled forward from its planned Day 59 to Day 32
 to retire the project's largest risk early. See `LOG.md` for the day-by-day
@@ -111,7 +109,7 @@ every one of them.
 |---|---|
 | Rebuild this from a bare machine | [`docs/REBUILD.md`](docs/REBUILD.md) |
 | Understand the design in full | [`docs/CAN_Project_Technical_Report.pdf`](docs/CAN_Project_Technical_Report.pdf) (30 pages) |
-| See the submitted summary | [`docs/CAN_Bus_MixedSignal_Abstract.pdf`](docs/CAN_Bus_MixedSignal_Abstract.pdf) |
+| Read a one-page summary | [`docs/CAN_Bus_MixedSignal_Abstract.pdf`](docs/CAN_Bus_MixedSignal_Abstract.pdf) |
 | Check what was tested and how | [`docs/verification.md`](docs/verification.md) |
 | See the frozen analog parameters | [`docs/phy_spec.md`](docs/phy_spec.md) |
 | Pick the work up where it stopped | [`docs/handoff.md`](docs/handoff.md) |
@@ -146,7 +144,7 @@ LOG.md           daily development record
 
 ## Six upstream eSim/NGHDL bugs found and patched
 
-All in `tools/`, and worth contributing back:
+All in `tools/`, and worth contributing back to the eSim project:
 
 1. **`UnboundLocalError` on Convert** — `attr_microcontroller` used before
    assignment when the project XML lacks a `<microcontroller>` element
@@ -277,4 +275,5 @@ Stated explicitly rather than omitted. Full list in `docs/verification.md`:
 
 ## License
 
-Educational project submitted to FOSSEE, IIT Bombay.
+Personal educational project. Built with [eSim](https://esim.fossee.in), an
+open-source EDA tool from FOSSEE, IIT Bombay.

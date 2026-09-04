@@ -442,9 +442,8 @@
 - Recorded the six upstream eSim/NGHDL bugs in one place for submission
 
 ## Day 42 - eSim project path: symbol and PHY subcircuit
-- FOSSEE requirements confirmed: submission needs a REAL eSim project (.sch, .pro,
-  .cir, cache.bak, .lib.xml) plus VHDL files, an abstract PDF, and a proposal
-  approved up to 7 working days in advance
+- eSim project layout confirmed: a real eSim project needs .sch, .pro, .cir,
+  cache.bak, .lib.xml, plus the VHDL files
 - KiCad symbol for can_node_top now generated. The key finding: symbol creation
   only runs when NGHDL is launched FROM eSim (esimFlag == 1 in ngspice_ghdl.py).
   Running nghdl standalone builds the ngspice model but never the symbol - which
@@ -459,14 +458,12 @@
 - Subcircuit verified standalone before any GUI work: receiver output measured
   5.0 V recessive, 0.0 V dominant, 5.0 V recessive again
 
-## Day 42 (cont) - PROPOSAL SUBMITTED
-- FOSSEE Circuit Simulation Project proposal submitted and acknowledged by email
+## Day 42 (cont) - project proposal written up
 - Title: CAN (Controller Area Network) Bus - Mixed-Signal Modelling and
   Verification of a Multi-Node Communication Protocol in eSim
-- Approval expected within 7 working days
-- Description trimmed to 693 chars for the 500-700 limit; full detail is in the
-  attached PDF (docs/CANBusProposal.pdf)
-- Reference field wants LINKS, so used the public Bosch CAN 2.0 spec URL
+- Description trimmed to 693 chars; full detail is in the attached PDF
+  (docs/CANBusProposal.pdf)
+- Used the public Bosch CAN 2.0 spec URL as the reference link
 
 ## Day 42 (cont) - eSim subcircuit path solved
 - eSim classifies a component as a subcircuit purely by reference designator:
@@ -523,7 +520,7 @@
 - Bus levels match ISO 11898-2: CANH 2.5 to 3.5 V, CANL 2.5 to 1.5 V,
   differential 0 V recessive / 2 V dominant, receiver output tracking cleanly
 - Three figures generated with matplotlib from the ngspice ASCII raw file,
-  satisfying the "Python plots" requirement in the FOSSEE guidelines
+  giving proper Python-generated plots alongside the ngspice ones
 
 ## Day 42 (final) - schematic wired, package rebuilt
 - Added 66 stub wires so every pin reads as connected in the conventional

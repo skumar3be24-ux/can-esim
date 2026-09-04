@@ -42,7 +42,7 @@ def tbl(data, widths):
 
 s=[]
 s.append(Paragraph("CAN (Controller Area Network) Bus &ndash; Mixed-Signal Modelling and Verification of a Multi-Node Communication Protocol in eSim", T))
-s.append(Paragraph("Sourabh Kumar &nbsp;&middot;&nbsp; Thapar Institute of Engineering and Technology &nbsp;&middot;&nbsp; FOSSEE eSim Circuit Simulation Project", AU))
+s.append(Paragraph("Sourabh Kumar &nbsp;&middot;&nbsp; Thapar Institute of Engineering and Technology", AU))
 
 s.append(Paragraph("1. Introduction", H))
 s.append(Paragraph(

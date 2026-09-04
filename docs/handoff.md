@@ -1,6 +1,5 @@
 # CAN Protocol Modelling in eSim — Project Handoff
 
-**FOSSEE eSim Semester Long Internship, Autumn 2026 — Task 2**
 Author: Sourabh Kumar · Repository: `github.com/skumar3be24-ux/can-esim`
 
 ---
@@ -16,7 +15,7 @@ Remaining work is presentation, not engineering.
 
 ---
 
-## Current state (end of Day 43, submission-ready)
+## Current state (end of Day 43, feature-complete)
 
 ### Working and verified
 
@@ -88,7 +87,7 @@ LOG.md          day-by-day record
 
 ## Six upstream eSim/NGHDL bugs found and fixed
 
-All patched in `tools/`, worth submitting back to FOSSEE.
+All patched in `tools/`, worth contributing back to the eSim project.
 
 1. **`UnboundLocalError` on Convert** — `attr_microcontroller` used before
    assignment when the project XML lacks a `<microcontroller>` element.
@@ -159,8 +158,6 @@ including the five eSim/NGHDL defects that must be patched first.
 
 ## Next steps
 
-1. Write the submission report from `docs/verification.md`
+1. Write up the design report from `docs/verification.md`
 2. Optionally close gaps: retransmission, extended identifiers, skewed clocks
-3. Submit the six patches to FOSSEE
-4. Email `contact-esim@fossee.in`, subject exactly:
-   `eSim Semester Long Internship - Autumn 2026 Submission Task 2`
+3. Contribute the six patches back to the eSim project upstream

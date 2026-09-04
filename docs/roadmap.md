@@ -1,7 +1,7 @@
 # CAN Protocol — Complete Circuit-Level Modelling & Verification in eSim
 ## Master Roadmap (Unconstrained Edition)
 
-**Project:** FOSSEE eSim Semester Long Internship, Autumn 2026 — Task 2
+**Project:** CAN protocol mixed-signal modelling and verification in eSim
 **Author:** Vlsi Integration · vlsiintegration@gmail.com
 **Platform:** Ubuntu 22.04.5 LTS (VirtualBox), eSim 2.5, ngspice-35 (NGHDL), GHDL 4.1.0, GTKWave 3.3.104
 **Plan length:** 86 working days, phase-structured, ~3 h/day (~260 hours)
@@ -2851,11 +2851,8 @@ Absorb slip. `git tag phase10-complete`.
    - Verify the data transfer ✓
    - Include analog / digital / mixed signal as appropriate ✓
    - Follow the circuit-proposal procedure ✓
-2. **Read the "propose the circuits" procedure page linked in the task.** I cannot verify its current contents; it may specify a format or a separate proposal step. Do not skip this.
-3. Email **contact-esim@fossee.in**, subject exactly:
-   `eSim Semester Long Internship - Autumn 2026 Submission Task 2`
-4. Final commit, tag `v1.0-submitted`, push.
-5. Archive the whole project off-machine.
+2. Write up the final report and push a tagged release.
+3. Archive the whole project off-machine.
 
 **Exit criterion:** submitted, tagged, archived.
 
@@ -3004,10 +3001,10 @@ If everything else were lost, these six would still constitute a strong submissi
 
 **Show your derivations.** An examiner can tell the difference between "R_on = 45 Ω" and a derivation that starts from the load current and arrives at 45 Ω. The second is worth several times the first.
 
-## 8.2 Submission package
+## 8.2 Final package
 
 ```
-CAN_eSim_Submission/
+CAN_eSim_Project/
 ├── README.md                      ← reproduce every result from here
 ├── report.pdf
 ├── schematics/                    ← Eeschema PDF + SVG exports
@@ -3020,16 +3017,7 @@ CAN_eSim_Submission/
 └── LOG.md                         ← the development record
 ```
 
-**`README.md` is worth disproportionate effort.** An examiner who reproduces your headline result in ten minutes rates the work far higher than one who cannot get it to run.
-
-## 8.3 Email
-
-**To:** contact-esim@fossee.in
-**Subject:** `eSim Semester Long Internship - Autumn 2026 Submission Task 2`
-
-Contents: name and contact; protocol chosen and why; one paragraph on what was modelled and verified; headline results (3-node arbitration verified, 71 tests passing, oscillator tolerance measured at 0.98%); attachments or link.
-
-**Before sending:** re-read the circuit-proposal procedure linked from the task statement. Its current requirements are unknown to me and it may mandate a specific format or a separate proposal step.
+**`README.md` is worth disproportionate effort.** A reader who reproduces the headline result in ten minutes rates the work far higher than one who cannot get it to run.
 
 ---
 
